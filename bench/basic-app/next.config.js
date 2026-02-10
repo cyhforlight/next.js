@@ -1,3 +1,4 @@
+/** @type {import("next").NextConfig} */
 module.exports = {
   // Deployed apps serve assets with a deployment marker in the query
   // string (e.g. ?dpl=... on Vercel), which every chunk entry in Flight
