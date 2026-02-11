@@ -8,6 +8,7 @@ import type { ParsedUrlQuery } from 'node:querystring'
 import type { UrlWithParsedQuery } from 'node:url'
 import type {
   PrerenderManifest,
+  PreviewPropsManifest,
   RequiredServerFilesManifest,
 } from '../../build'
 import type { DevRoutesManifest } from '../lib/router-utils/setup-dev-bundler'
@@ -21,6 +22,7 @@ import {
   NEXT_FONT_MANIFEST,
   PREFETCH_HINTS,
   PRERENDER_MANIFEST,
+  PREVIEW_PROPS_MANIFEST,
   REACT_LOADABLE_MANIFEST,
   ROUTES_MANIFEST,
   SERVER_FILES_MANIFEST,
@@ -37,7 +39,7 @@ import { removePathPrefix } from '../../shared/lib/router/utils/remove-path-pref
 import { getServerUtils } from '../server-utils'
 import { detectDomainLocale } from '../../shared/lib/i18n/detect-domain-locale'
 import { getHostname } from '../../shared/lib/get-hostname'
-import { checkIsOnDemandRevalidate } from '../api-utils'
+import { checkIsOnDemandRevalidate, type __ApiPreviewProps } from '../api-utils'
 import type { PreviewData } from '../../types'
 import type { BuildManifest } from '../get-page-files'
 import type { ReactLoadableManifest } from '../load-components'
@@ -220,6 +222,7 @@ export abstract class RouteModule<
     dynamicCssManifest: any
     prefetchHintsManifest: Record<string, any> | undefined
     interceptionRoutePatterns: RegExp[]
+    previewProps: __ApiPreviewProps
   } {
     let result
     if (process.env.NEXT_RUNTIME === 'edge') {
@@ -242,6 +245,7 @@ export abstract class RouteModule<
           version: 4,
           preview: getEdgePreviewProps(),
         } as const,
+        previewProps: getEdgePreviewProps(),
         routesManifest: {
           version: 4,
           caseSensitive: Boolean(process.env.__NEXT_CASE_SENSITIVE_ROUTES),
@@ -291,6 +295,7 @@ export abstract class RouteModule<
       const [
         routesManifest,
         prerenderManifest,
+        previewProps,
         buildManifest,
         fallbackBuildManifest,
         reactLoadableManifest,
@@ -313,6 +318,12 @@ export abstract class RouteModule<
           projectDir,
           distDir: this.distDir,
           manifest: PRERENDER_MANIFEST,
+          shouldCache: !this.isDev,
+        }),
+        loadManifestFromRelativePath<PreviewPropsManifest>({
+          projectDir,
+          distDir: this.distDir,
+          manifest: `server/${PREVIEW_PROPS_MANIFEST}`,
           shouldCache: !this.isDev,
         }),
         loadManifestFromRelativePath<BuildManifest>({
@@ -413,6 +424,7 @@ export abstract class RouteModule<
         routesManifest,
         nextFontManifest,
         prerenderManifest,
+        previewProps,
         serverFilesManifest,
         reactLoadableManifest,
         clientReferenceManifest: (clientReferenceManifest as any)
@@ -473,6 +485,7 @@ export abstract class RouteModule<
   public async getIncrementalCache(
     req: IncomingMessage | BaseNextRequest,
     nextConfig: NextConfigRuntime,
+    previewProps: DeepReadonly<__ApiPreviewProps>,
     prerenderManifest: DeepReadonly<PrerenderManifest>,
     isMinimalMode: boolean
   ): Promise<IncrementalCache> {
@@ -517,7 +530,8 @@ export abstract class RouteModule<
         fetchCacheKeyPrefix: nextConfig.experimental.fetchCacheKeyPrefix,
         maxMemoryCacheSize: nextConfig.cacheMaxMemorySize,
         flushToDisk: !isMinimalMode && nextConfig.experimental.isrFlushToDisk,
-        getPrerenderManifest: () => prerenderManifest,
+        previewProps,
+        prerenderManifest,
         CurCacheHandler: CacheHandler,
       })
 
@@ -641,6 +655,7 @@ export abstract class RouteModule<
         nextConfig: NextConfigRuntime
         routerServerContext?: RouterServerContext[string]
         interceptionRoutePatterns?: any
+        previewProps: __ApiPreviewProps
       }
     | undefined
   > {
@@ -677,7 +692,7 @@ export abstract class RouteModule<
       await ensureInstrumentationRegistered(absoluteProjectDir, this.distDir)
     }
     const manifests = this.loadManifests(srcPage, absoluteProjectDir)
-    const { routesManifest, prerenderManifest, serverFilesManifest } = manifests
+    const { routesManifest, previewProps, serverFilesManifest } = manifests
 
     const { basePath, i18n, rewrites } = routesManifest
 
@@ -991,7 +1006,7 @@ export abstract class RouteModule<
     }
 
     const { isOnDemandRevalidate, revalidateOnlyGenerated } =
-      checkIsOnDemandRevalidate(req.headers, prerenderManifest.preview)
+      checkIsOnDemandRevalidate(req.headers, previewProps)
 
     let isDraftMode = false
     let previewData: PreviewData
@@ -1004,7 +1019,7 @@ export abstract class RouteModule<
       previewData = tryGetPreviewData(
         req,
         res,
-        prerenderManifest.preview,
+        previewProps,
         Boolean(multiZoneDraftMode)
       )
       isDraftMode = previewData !== false
@@ -1112,6 +1127,7 @@ export abstract class RouteModule<
     cacheKey,
     routeKind,
     isFallback,
+    previewProps,
     prerenderManifest,
     isRoutePPREnabled,
     isOnDemandRevalidate,
@@ -1125,6 +1141,7 @@ export abstract class RouteModule<
     cacheKey: string | null
     routeKind: RouteKind
     isFallback?: boolean
+    previewProps: DeepReadonly<__ApiPreviewProps>
     prerenderManifest: DeepReadonly<PrerenderManifest>
     isRoutePPREnabled?: boolean
     isOnDemandRevalidate?: boolean
@@ -1154,6 +1171,7 @@ export abstract class RouteModule<
       incrementalCache: await this.getIncrementalCache(
         req,
         nextConfig,
+        previewProps,
         prerenderManifest,
         isMinimalMode
       ),
