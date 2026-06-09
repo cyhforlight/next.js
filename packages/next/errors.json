@@ -1423,5 +1423,7 @@
   "1422": "MIN_PREFETCHABLE_STALE must not exceed MIN_SHELL_STALE.",
   "1423": "DevValidationScheduler requires at least one active validation",
   "1424": "Invariant: no direct app page entry found for %s",
-  "1425": "Invariant: dev virtual filesystem item was not handled by the development bundler"
+  "1425": "Invariant: dev virtual filesystem item was not handled by the development bundler",
+  "1426": "Invariant: dev server state can only be updated in dev",
+  "1427": "Invariant: no app initialized"
 }
