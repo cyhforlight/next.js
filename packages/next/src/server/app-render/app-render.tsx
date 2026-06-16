@@ -3671,7 +3671,42 @@ async function renderToStream(
         // If provided, the postpone state should be parsed as JSON so it can be
         // provided to React.
         if (typeof renderOpts.postponed === 'string') {
-          if (postponedState?.type === DynamicState.DATA) {
+          if (postponedState?.type === DynamicState.PARSE_FAILURE) {
+            // We could not parse the postponed state (for example, the
+            // decompressed resume data cache exceeded the configured limit).
+            // We can't resume into the suspended React tree, so synthesize a
+            // flight stream whose root throws with a stable digest. The client
+            // will surface this through the root error boundary.
+            const serverError = new Error('Failed to parse postponed state', {
+              cause: postponedState.error,
+            }) as Error & { digest: string }
+            serverError.digest = 'NEXT_POSTPONED_STATE_PARSE_FAILED'
+            const ParseFailureRoot = () => {
+              throw serverError
+            }
+
+            const parseFailureFlightStream = renderToNodeFlightStream(
+              ctx.componentMod,
+              ctx.componentMod.createElement(ParseFailureRoot),
+              clientModules,
+              {
+                filterStackFrame,
+                onError: serverComponentsErrorHandler,
+              }
+            )
+
+            const inlinedDataStream = createNodeInlinedDataStream(
+              parseFailureFlightStream,
+              nonce,
+              formState
+            )
+
+            if (renderSpan.isRecording()) renderSpan.end()
+            return chainStreams(
+              inlinedDataStream,
+              createDocumentClosingStream()
+            )
+          } else if (postponedState?.type === DynamicState.DATA) {
             // We have a complete HTML Document in the prerender but we need to
             // still include the new server component render because it was not included
             // in the static prelude.
@@ -3811,7 +3846,40 @@ async function renderToStream(
         // If provided, the postpone state should be parsed as JSON so it can be
         // provided to React.
         if (typeof renderOpts.postponed === 'string') {
-          if (postponedState?.type === DynamicState.DATA) {
+          if (postponedState?.type === DynamicState.PARSE_FAILURE) {
+            // See the matching branch in the nodeStreams HTML path above.
+            const serverError = new Error('Failed to parse postponed state', {
+              cause: postponedState.error,
+            }) as Error & { digest: string }
+            serverError.digest = 'NEXT_POSTPONED_STATE_PARSE_FAILED'
+            console.error(serverError)
+
+            const ParseFailureRoot = () => {
+              throw serverError
+            }
+
+            const parseFailureFlightStream = renderToWebFlightStream(
+              ctx.componentMod,
+              ctx.componentMod.createElement(ParseFailureRoot),
+              clientModules,
+              {
+                filterStackFrame,
+                onError: serverComponentsErrorHandler,
+              }
+            )
+
+            const inlinedDataStream = createWebInlinedDataStream(
+              parseFailureFlightStream,
+              nonce,
+              formState
+            )
+
+            if (renderSpan.isRecording()) renderSpan.end()
+            return chainStreams(
+              inlinedDataStream,
+              createDocumentClosingStream()
+            )
+          } else if (postponedState?.type === DynamicState.DATA) {
             // We have a complete HTML Document in the prerender but we need to
             // still include the new server component render because it was not included
             // in the static prelude.

@@ -22,6 +22,15 @@ export enum DynamicState {
    * The dynamic access occurred during the HTML shell render phase.
    */
   HTML = 2,
+
+  /**
+   * The serialized postponed state could not be parsed (for example, the
+   * decompressed resume data cache exceeded the configured limit). We can no
+   * longer resume into the suspended React tree, so callers should surface this
+   * as a controlled failure with a known digest rather than silently degrading
+   * to a DATA-style render.
+   */
+  PARSE_FAILURE = 3,
 }
 
 /**
@@ -71,9 +80,29 @@ type ReactPostponed = NonNullable<
   import('react-dom/static').PrerenderResult['postponed']
 >
 
+/**
+ * The postponed state when parsing failed. The render path will surface a
+ * controlled error with a stable digest instead of attempting a resume.
+ */
+export type PostponedParseFailureState = {
+  readonly type: DynamicState.PARSE_FAILURE
+
+  /**
+   * The original error that caused the parse to fail. Used for server-side
+   * logging so the operator can see why parsing failed.
+   */
+  readonly error: unknown
+
+  /**
+   * An empty resume data cache, since we couldn't recover the original one.
+   */
+  readonly renderResumeDataCache: RenderResumeDataCache
+}
+
 export type PostponedState =
   | DynamicDataPostponedState
   | DynamicHTMLPostponedState
+  | PostponedParseFailureState
 
 export async function getDynamicHTMLPostponedState(
   postponed: ReactPostponed,
@@ -201,13 +230,16 @@ export function parsePostponedState(
         renderResumeDataCache,
       }
     } catch (err) {
-      console.error('Failed to parse postponed state', err)
-      return { type: DynamicState.DATA, renderResumeDataCache }
+      return {
+        type: DynamicState.PARSE_FAILURE,
+        error: err,
+        renderResumeDataCache,
+      }
     }
   } catch (err) {
-    console.error('Failed to parse postponed state', err)
     return {
-      type: DynamicState.DATA,
+      type: DynamicState.PARSE_FAILURE,
+      error: err,
       renderResumeDataCache: createRenderResumeDataCache(
         createPrerenderResumeDataCache()
       ),
