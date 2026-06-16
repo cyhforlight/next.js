@@ -83,6 +83,7 @@ import {
 import { removePathPrefix } from '../shared/lib/router/utils/remove-path-prefix'
 import {
   compareAppPaths,
+  getAppPageRouteDefinitionPage,
   normalizeAppPath,
 } from '../shared/lib/router/utils/app-paths'
 import { getHostname } from '../shared/lib/get-hostname'
@@ -1172,7 +1173,6 @@ export default abstract class Server<
           // concrete pathname. Match it by identity so a pattern such as
           // `/[...path]` cannot be captured by the regex for `/[slug]`.
           let routeDefinition: RouteDefinition | undefined
-          let routeParams: Params | undefined
           if (pageIsDynamic) {
             routeDefinition = this.getRoutePatternDefinition(
               srcPathname,
@@ -1193,7 +1193,6 @@ export default abstract class Server<
                 pageIsDynamic = true
                 paramsResult.params = match.params
                 paramsResult.hasValidParams = true
-                routeParams = match.params
               }
             }
           }
@@ -1385,7 +1384,6 @@ export default abstract class Server<
             }
 
             if (params) {
-              routeParams = params
               matchedPath = utils.interpolateDynamicPath(srcPathname, params)
               req.url = utils.interpolateDynamicPath(req.url!, params)
 
@@ -1416,14 +1414,11 @@ export default abstract class Server<
             }
           }
 
-          if (routeDefinition) {
-            addRequestMeta(req, 'match', {
-              definition: routeDefinition,
-              params: routeParams,
-            })
-          } else {
-            removeRequestMeta(req, 'match')
-          }
+          // x-matched-path describes the platform's filesystem dispatch. Use
+          // it to normalize params above, but do not treat it as the final
+          // render match: locale stripping and route precedence can select a
+          // different route for the resulting concrete pathname.
+          removeRequestMeta(req, 'match')
 
           if (pageIsDynamic || didRewrite) {
             utils.normalizeCdnUrl(req, [
@@ -1704,14 +1699,7 @@ export default abstract class Server<
     const appPaths = this.appPathRoutes?.[pathname]
     if (!appPaths) return
 
-    let page = appPaths[appPaths.length - 1]
-    for (let i = appPaths.length - 1; i >= 0; i--) {
-      const appPath = appPaths[i]
-      if (normalizeAppPath(appPath) === pathname) {
-        page = appPath
-        break
-      }
-    }
+    const page = getAppPageRouteDefinitionPage(appPaths)
     if (!isAppPageRoute(page)) return
 
     const filename = this.appPathsManifest?.[page]
