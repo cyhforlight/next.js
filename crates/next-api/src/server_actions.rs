@@ -46,7 +46,7 @@ use turbopack_core::{
     virtual_source::VirtualSource,
 };
 use turbopack_ecmascript::{
-    EcmascriptParsable,
+    EcmascriptAnalyzable, EcmascriptParsable, RuntimeEnvVarReferences,
     chunk::{EcmascriptChunkItem, EcmascriptChunkItemExt, EcmascriptChunkPlaceable},
     parse::ParseResult,
     tree_shake::part::module::EcmascriptModulePartAsset,
@@ -250,7 +250,7 @@ impl Asset for ServerActionManifestAsset {
         struct ActionMetadata<'a> {
             exported_name: &'a str,
             filename: Cow<'a, str>,
-            code_hash: Option<ReadRef<RcStr>>,
+            data: Option<ReadRef<ModulesInformation>>,
         }
 
         let action_metadata: Vec<(&str, ActionMetadata<'_>)> = actions_value
@@ -265,26 +265,28 @@ impl Asset for ServerActionManifestAsset {
                     Cow::Owned(module.ident().await?.path.to_string())
                 };
 
+                let data = if durable_use_cache_entries
+                    && extract_type_from_server_reference_id(hash_id)
+                        == ServerReferenceType::UseCache
+                {
+                    Some(
+                        compute_subtree_content_hash(
+                            *self.module_graph,
+                            **module,
+                            *self.chunking_context,
+                        )
+                        .await?,
+                    )
+                } else {
+                    None
+                };
+
                 Ok((
                     &**hash_id,
                     ActionMetadata {
                         exported_name: &meta.name,
                         filename,
-                        code_hash: if durable_use_cache_entries
-                            && extract_type_from_server_reference_id(hash_id)
-                                == ServerReferenceType::UseCache
-                        {
-                            Some(
-                                compute_subtree_content_hash(
-                                    *self.module_graph,
-                                    **module,
-                                    *self.chunking_context,
-                                )
-                                .await?,
-                            )
-                        } else {
-                            None
-                        },
+                        data,
                     },
                 ))
             })
@@ -297,7 +299,7 @@ impl Asset for ServerActionManifestAsset {
             ActionMetadata {
                 exported_name,
                 filename,
-                code_hash,
+                data,
             },
         ) in &action_metadata
         {
@@ -309,7 +311,10 @@ impl Asset for ServerActionManifestAsset {
                     is_async: async_module_info
                         .is_async(self.chunk_item.module().to_resolved().await?)
                         .await?,
-                    code_hash: code_hash.as_ref().map(|h| h.as_str()),
+                    code_hash: data.as_ref().map(|d| d.ident_code_hash.as_str()),
+                    runtime_env_vars: data
+                        .as_ref()
+                        .map(|d| d.runtime_env_var_references.as_slice()),
                 },
             );
 
@@ -356,12 +361,19 @@ pub async fn to_rsc_context(
     Ok(module)
 }
 
+#[turbo_tasks::value]
+#[derive(Debug)]
+struct ModulesInformation {
+    pub ident_code_hash: RcStr,
+    pub runtime_env_var_references: Vec<RcStr>,
+}
+
 #[turbo_tasks::function]
 async fn compute_subtree_content_hash(
     module_graph: ResolvedVc<ModuleGraph>,
     entry: ResolvedVc<Box<dyn Module>>,
     chunking_context: Vc<Box<dyn ChunkingContext>>,
-) -> Result<Vc<RcStr>> {
+) -> Result<Vc<ModulesInformation>> {
     let span = tracing::info_span!(
         "compute use-cache code hash",
         entry = display(entry.ident_string().await?)
@@ -405,27 +417,45 @@ async fn compute_subtree_content_hash(
                 entry.ident().await?.path,
                 modules
                     .iter()
-                    .map(async |m| Ok(format!(
-                        "  '{}': {}",
-                        m.ident_string().await?,
-                        module_hash(*module_graph, chunking_context, async_module_info, **m)
-                            .await?
-                    )))
+                    .map(async |m| {
+                        let data =
+                            module_hash(*module_graph, chunking_context, async_module_info, **m)
+                                .await?;
+                        Ok(format!(
+                            "  '{}': {}",
+                            m.ident_string().await?,
+                            data.ident_code_hash
+                        ))
+                    })
                     .try_join()
                     .await?
                     .join("\n")
             );
         }
 
-        let hashes = modules
+        let data = modules
             .into_iter()
             .map(|m| module_hash(*module_graph, chunking_context, async_module_info, *m))
             .try_join()
             .await?;
 
-        anyhow::Ok(Vc::cell(
-            deterministic_hash("", hashes, HashAlgorithm::Xxh3Hash128Hex).into(),
-        ))
+        let mut hashes = Vec::with_capacity(data.len());
+        let mut runtime_env_vars = FxIndexSet::default();
+
+        for data in &data {
+            hashes.push(&data.ident_code_hash);
+            runtime_env_vars.extend(data.runtime_env_var_references.iter().flatten());
+        }
+
+        let hash = deterministic_hash("", hashes, HashAlgorithm::Xxh3Hash128Hex).into();
+
+        anyhow::Ok(
+            ModulesInformation {
+                ident_code_hash: hash,
+                runtime_env_var_references: runtime_env_vars.into_iter().cloned().collect(),
+            }
+            .cell(),
+        )
     }
     .instrument(span)
     .await
@@ -442,18 +472,33 @@ async fn compute_subtree_content_hash(
     }
 }
 
+#[turbo_tasks::value]
+#[derive(Debug)]
+struct ModuleInformation {
+    pub ident_code_hash: RcStr,
+    pub runtime_env_var_references: Option<ReadRef<RuntimeEnvVarReferences>>,
+}
+
 #[turbo_tasks::function]
 async fn module_hash(
     module_graph: ResolvedVc<ModuleGraph>,
     chunking_context: ResolvedVc<Box<dyn ChunkingContext>>,
     async_module_info: ResolvedVc<AsyncModulesInfo>,
     m: ResolvedVc<Box<dyn Module>>,
-) -> Result<Vc<RcStr>> {
+) -> Result<Vc<ModuleInformation>> {
     let ident = m.ident();
     let ident_value = ident.await?;
     let ident_str = ident.to_string().await?;
 
-    if let Some(placeable_module) = ResolvedVc::try_downcast::<Box<dyn EcmascriptChunkPlaceable>>(m)
+    let runtime_env_var_references =
+        if let Some(module) = ResolvedVc::try_downcast::<Box<dyn EcmascriptAnalyzable>>(m) {
+            Some(module.runtime_env_var_references().await?)
+        } else {
+            None
+        };
+
+    let ident_code_hash = if let Some(placeable_module) =
+        ResolvedVc::try_downcast::<Box<dyn EcmascriptChunkPlaceable>>(m)
         && !ident_value
             .layer
             .as_ref()
@@ -472,11 +517,11 @@ async fn module_hash(
             None
         };
         let code = chunk_item.code(async_info);
-        Ok(Vc::cell(RcStr::from(deterministic_hash(
+        RcStr::from(deterministic_hash(
             "",
             (ident_str, code.source_code_hash().await?),
             HashAlgorithm::Xxh3Hash128Hex,
-        ))))
+        ))
     } else {
         // A non-JS static file or an external module
         let content_hash = m
@@ -486,12 +531,18 @@ async fn module_hash(
             .content()
             .hash(HashAlgorithm::Xxh3Hash128Hex)
             .await?;
-        Ok(Vc::cell(RcStr::from(deterministic_hash(
+        RcStr::from(deterministic_hash(
             "",
             (ident_str, content_hash),
             HashAlgorithm::Xxh3Hash128Hex,
-        ))))
+        ))
+    };
+
+    Ok(ModuleInformation {
+        ident_code_hash,
+        runtime_env_var_references,
     }
+    .cell())
 }
 
 /// Server action info for JSON parsing

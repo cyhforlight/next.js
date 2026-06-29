@@ -13,7 +13,7 @@ use turbopack_core::{
 use crate::{
     AnalyzeEcmascriptModuleResult, EcmascriptAnalyzable, EcmascriptAnalyzableExt,
     EcmascriptModuleAsset, EcmascriptModuleContent, EcmascriptModuleContentOptions,
-    EcmascriptParsable,
+    EcmascriptParsable, RuntimeEnvVarReferences,
     chunk::{
         EcmascriptChunkItemContent, EcmascriptChunkPlaceable, EcmascriptExports,
         ecmascript_chunk_item,
@@ -54,6 +54,11 @@ impl EcmascriptAnalyzable for EcmascriptModulePartAsset {
     #[turbo_tasks::function]
     fn analyze(&self) -> Vc<AnalyzeEcmascriptModuleResult> {
         analyze_ecmascript_module(*self.full_module, Some(self.part.clone()))
+    }
+
+    #[turbo_tasks::function]
+    async fn runtime_env_var_references(self: Vc<Self>) -> Result<Vc<RuntimeEnvVarReferences>> {
+        Ok(*self.analyze().await?.runtime_env_var_references)
     }
 
     #[turbo_tasks::function]
