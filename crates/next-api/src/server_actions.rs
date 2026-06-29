@@ -46,7 +46,7 @@ use turbopack_core::{
     virtual_source::VirtualSource,
 };
 use turbopack_ecmascript::{
-    EcmascriptAnalyzable, EcmascriptParsable, RuntimeEnvVarReferences,
+    EcmascriptAnalyzable, EcmascriptParsable, EnvVarReferences,
     chunk::{EcmascriptChunkItem, EcmascriptChunkItemExt, EcmascriptChunkPlaceable},
     parse::ParseResult,
     tree_shake::part::module::EcmascriptModulePartAsset,
@@ -366,6 +366,7 @@ pub async fn to_rsc_context(
 struct ModulesInformation {
     pub ident_code_hash: RcStr,
     pub runtime_env_var_references: Vec<RcStr>,
+    pub runtime_env_var_references_all: bool,
 }
 
 #[turbo_tasks::function]
@@ -441,10 +442,14 @@ async fn compute_subtree_content_hash(
 
         let mut hashes = Vec::with_capacity(data.len());
         let mut runtime_env_vars = FxIndexSet::default();
+        let mut runtime_env_vars_all = false;
 
         for data in &data {
             hashes.push(&data.ident_code_hash);
-            runtime_env_vars.extend(data.runtime_env_var_references.iter().flatten());
+            if let Some(env) = &data.env_var_references {
+                runtime_env_vars.extend(env.runtime.iter());
+                runtime_env_vars_all |= env.runtime_all;
+            }
         }
 
         let hash = deterministic_hash("", hashes, HashAlgorithm::Xxh3Hash128Hex).into();
@@ -453,6 +458,7 @@ async fn compute_subtree_content_hash(
             ModulesInformation {
                 ident_code_hash: hash,
                 runtime_env_var_references: runtime_env_vars.into_iter().cloned().collect(),
+                runtime_env_var_references_all: runtime_env_vars_all,
             }
             .cell(),
         )
@@ -476,7 +482,7 @@ async fn compute_subtree_content_hash(
 #[derive(Debug)]
 struct ModuleInformation {
     pub ident_code_hash: RcStr,
-    pub runtime_env_var_references: Option<ReadRef<RuntimeEnvVarReferences>>,
+    pub env_var_references: Option<ReadRef<EnvVarReferences>>,
 }
 
 #[turbo_tasks::function]
@@ -490,9 +496,9 @@ async fn module_hash(
     let ident_value = ident.await?;
     let ident_str = ident.to_string().await?;
 
-    let runtime_env_var_references =
+    let env_var_references =
         if let Some(module) = ResolvedVc::try_downcast::<Box<dyn EcmascriptAnalyzable>>(m) {
-            Some(module.runtime_env_var_references().await?)
+            Some(module.env_var_references().await?)
         } else {
             None
         };
@@ -540,7 +546,7 @@ async fn module_hash(
 
     Ok(ModuleInformation {
         ident_code_hash,
-        runtime_env_var_references,
+        env_var_references,
     }
     .cell())
 }

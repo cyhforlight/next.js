@@ -17,6 +17,8 @@ pub mod pattern_mapping;
 pub mod raw;
 pub mod require_context;
 pub mod service_worker;
+#[cfg(test)]
+mod tests;
 pub mod type_issue;
 pub mod typescript;
 pub mod unreachable;
@@ -98,7 +100,7 @@ use worker::{WorkerAssetReference, WorkerGlobalPlaceholder, WorkerGlobalsReplace
 pub use crate::references::esm::export::{FollowExportsResult, follow_reexports};
 use crate::{
     AnalyzeMode, EcmascriptModuleAsset, EcmascriptModuleAssetType, EcmascriptParsable,
-    ModuleTypeResult, RuntimeEnvVarReferences, TreeShakingMode, TypeofWindow,
+    EnvVarReferences, ModuleTypeResult, TreeShakingMode, TypeofWindow,
     analyzer::{
         Bump, BumpVec, ConstantNumber, ConstantString, ConstantValue as JsConstantValue, JsValue,
         JsValueUrlKind, Modified, ObjectPart, RequireContextValue, ThreadLocal,
@@ -167,7 +169,7 @@ pub struct AnalyzeEcmascriptModuleResult {
     pub successful: bool,
     pub source_map: Option<ResolvedVc<Box<dyn GenerateSourceMap>>>,
 
-    pub runtime_env_var_references: ResolvedVc<RuntimeEnvVarReferences>,
+    pub env_var_references: ResolvedVc<EnvVarReferences>,
 }
 
 #[turbo_tasks::value_impl]
@@ -226,7 +228,8 @@ struct AnalyzeEcmascriptModuleResultBuilder {
     source_map: Option<ResolvedVc<Box<dyn GenerateSourceMap>>>,
     side_effects: ModuleSideEffects,
 
-    runtime_env_var_references: FxIndexSet<RcStr>,
+    env_var_references_runtime: FxIndexSet<RcStr>,
+    env_var_references_all: bool,
 
     #[cfg(debug_assertions)]
     ident: RcStr,
@@ -247,7 +250,8 @@ impl AnalyzeEcmascriptModuleResultBuilder {
             successful: false,
             source_map: None,
             side_effects: ModuleSideEffects::SideEffectful,
-            runtime_env_var_references: Default::default(),
+            env_var_references_runtime: Default::default(),
+            env_var_references_all: false,
             #[cfg(debug_assertions)]
             ident: Default::default(),
         }
@@ -331,7 +335,12 @@ impl AnalyzeEcmascriptModuleResultBuilder {
 
     /// Adds a runtime environment variable reference to the analysis result.
     pub fn add_runtime_env_var_reference(&mut self, runtime_env: RcStr) {
-        self.runtime_env_var_references.insert(runtime_env);
+        self.env_var_references_runtime.insert(runtime_env);
+    }
+
+    /// Sets the analysis result to include all runtime environment variable references.
+    pub fn set_runtime_env_var_reference_all(&mut self) {
+        self.env_var_references_all = true;
     }
 
     pub fn add_esm_reference_namespace_resolved(
@@ -439,9 +448,11 @@ impl AnalyzeEcmascriptModuleResultBuilder {
                 side_effects: self.side_effects,
                 successful: self.successful,
                 source_map: self.source_map,
-                runtime_env_var_references: ResolvedVc::cell(
-                    self.runtime_env_var_references.into_iter().collect(),
-                ),
+                env_var_references: EnvVarReferences {
+                    runtime: self.env_var_references_runtime.into_iter().collect(),
+                    runtime_all: self.env_var_references_all,
+                }
+                .resolved_cell(),
             },
         ))
     }
