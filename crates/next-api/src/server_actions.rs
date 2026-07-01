@@ -1,7 +1,9 @@
 use std::{borrow::Cow, collections::BTreeMap, io::Write, sync::LazyLock};
 
 use anyhow::{Context, Result, bail};
+use async_trait::async_trait;
 use bincode::{Decode, Encode};
+use either::Either;
 use next_core::{
     next_client_reference::{CssClientReferenceModule, EcmascriptClientReferenceModule},
     next_manifests::{
@@ -36,6 +38,7 @@ use turbopack_core::{
     context::AssetContext,
     file_source::FileSource,
     ident::AssetIdent,
+    issue::{Issue, IssueExt, IssueSeverity, IssueSource, IssueStage, StyledString},
     module::Module,
     module_graph::{
         GraphTraversalAction, ModuleGraph, ModuleGraphLayer, async_module_info::AsyncModulesInfo,
@@ -312,9 +315,13 @@ impl Asset for ServerActionManifestAsset {
                         .is_async(self.chunk_item.module().to_resolved().await?)
                         .await?,
                     code_hash: data.as_ref().map(|d| d.ident_code_hash.as_str()),
-                    runtime_env_vars: data
-                        .as_ref()
-                        .map(|d| d.runtime_env_var_references.as_slice()),
+                    runtime_env_vars: data.as_ref().map(|d| {
+                        if d.runtime_env_var_references_all {
+                            Either::Left(true)
+                        } else {
+                            Either::Right(d.runtime_env_var_references.as_slice())
+                        }
+                    }),
                 },
             );
 
@@ -436,7 +443,12 @@ async fn compute_subtree_content_hash(
 
         let data = modules
             .into_iter()
-            .map(|m| module_hash(*module_graph, chunking_context, async_module_info, *m))
+            .map(async |m| {
+                Ok((
+                    m,
+                    module_hash(*module_graph, chunking_context, async_module_info, *m).await?,
+                ))
+            })
             .try_join()
             .await?;
 
@@ -444,11 +456,72 @@ async fn compute_subtree_content_hash(
         let mut runtime_env_vars = FxIndexSet::default();
         let mut runtime_env_vars_all = false;
 
-        for data in &data {
+        #[turbo_tasks::value]
+        pub struct ActionIssue {
+            pub ident: ResolvedVc<AssetIdent>,
+            pub title: ResolvedVc<StyledString>,
+            pub source: Option<IssueSource>,
+        }
+        #[turbo_tasks::value_impl]
+        impl ActionIssue {
+            #[turbo_tasks::function]
+            pub fn new(
+                ident: ResolvedVc<AssetIdent>,
+                title: RcStr,
+                source: Option<IssueSource>,
+            ) -> Vc<Self> {
+                ActionIssue {
+                    ident,
+                    title: StyledString::Text(title).resolved_cell(),
+                    source,
+                }
+                .cell()
+            }
+        }
+
+        #[async_trait]
+        #[turbo_tasks::value_impl]
+        impl Issue for ActionIssue {
+            fn severity(&self) -> IssueSeverity {
+                IssueSeverity::Warning
+            }
+            fn stage(&self) -> IssueStage {
+                IssueStage::ProcessModule
+            }
+
+            async fn file_path(&self) -> Result<FileSystemPath> {
+                Ok(self.ident.await?.path.clone())
+            }
+
+            async fn title(&self) -> Result<StyledString> {
+                Ok((*self.title.await?).clone())
+            }
+
+            fn source(&self) -> Option<IssueSource> {
+                self.source
+            }
+        }
+
+        for (m, data) in &data {
             hashes.push(&data.ident_code_hash);
             if let Some(env) = &data.env_var_references {
                 runtime_env_vars.extend(env.runtime.iter());
-                runtime_env_vars_all |= env.runtime_all;
+                if let Some(issue_source) = &env.runtime_all {
+                    runtime_env_vars_all = true;
+
+                    ActionIssue::new(
+                        m.ident(),
+                        format!(
+                            "Dynamic process.env access from {}",
+                            entry.ident_string().await?
+                        )
+                        .into(),
+                        Some(*issue_source),
+                    )
+                    .to_resolved()
+                    .await?
+                    .emit();
+                }
             }
         }
 

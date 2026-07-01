@@ -1,4 +1,2 @@
-EnvVarReferences {
-    runtime: [],
-    runtime_all: false,
-}
+runtime_all: true
+runtime: []

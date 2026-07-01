@@ -92,6 +92,7 @@ use turbopack_core::{
     compile_time_info::CompileTimeInfo,
     context::AssetContext,
     ident::AssetIdent,
+    issue::IssueSource,
     module::{Module, ModuleSideEffects},
     module_graph::ModuleGraph,
     reference::ModuleReferences,
@@ -444,7 +445,7 @@ pub struct EnvVarReferences {
     pub runtime: Vec<RcStr>,
     // Whether the module references all environment variables (non-statically analyzeable
     // `process.env`).
-    pub runtime_all: bool,
+    pub runtime_all: Option<IssueSource>,
 }
 
 #[turbo_tasks::value_impl]

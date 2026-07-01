@@ -5,6 +5,7 @@ mod encode_uri_component;
 
 use anyhow::{Context, Result};
 use bincode::{Decode, Encode};
+use either::Either;
 use serde::{Deserialize, Serialize};
 use turbo_rcstr::RcStr;
 use turbo_tasks::{
@@ -453,7 +454,7 @@ pub struct ActionManifestWorkerEntry<'a> {
     pub code_hash: Option<&'a str>,
     #[serde(rename = "runtimeEnvVars")]
     #[serde(skip_serializing_if = "Option::is_none")]
-    pub runtime_env_vars: Option<&'a [RcStr]>,
+    pub runtime_env_vars: Option<Either<bool, &'a [RcStr]>>,
 }
 
 #[derive(Serialize, Debug, Clone)]

@@ -229,7 +229,7 @@ struct AnalyzeEcmascriptModuleResultBuilder {
     side_effects: ModuleSideEffects,
 
     env_var_references_runtime: FxIndexSet<RcStr>,
-    env_var_references_all: bool,
+    env_var_references_all: Option<IssueSource>,
 
     #[cfg(debug_assertions)]
     ident: RcStr,
@@ -251,7 +251,7 @@ impl AnalyzeEcmascriptModuleResultBuilder {
             source_map: None,
             side_effects: ModuleSideEffects::SideEffectful,
             env_var_references_runtime: Default::default(),
-            env_var_references_all: false,
+            env_var_references_all: None,
             #[cfg(debug_assertions)]
             ident: Default::default(),
         }
@@ -339,8 +339,8 @@ impl AnalyzeEcmascriptModuleResultBuilder {
     }
 
     /// Sets the analysis result to include all runtime environment variable references.
-    pub fn set_runtime_env_var_reference_all(&mut self) {
-        self.env_var_references_all = true;
+    pub fn set_runtime_env_var_reference_all(&mut self, issue_source: IssueSource) {
+        self.env_var_references_all = Some(issue_source);
     }
 
     pub fn add_esm_reference_namespace_resolved(
@@ -851,6 +851,10 @@ async fn analyze_ecmascript_module_internal(
         });
         graph.unwrap()
     };
+
+    if let Some(span) = var_graph.dynamic_process_env_access {
+        analysis.set_runtime_env_var_reference_all(issue_source(source, span));
+    }
 
     let span = tracing::trace_span!("effects processing");
     async {

@@ -47,3 +47,8 @@ if (
   process.env.FOO10 !== 'development'
 ) {
 }
+
+// ---
+
+const NAME = 'FOO11'
+console.log(process.env[NAME])
