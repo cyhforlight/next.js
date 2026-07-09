@@ -38,6 +38,7 @@ import {
 } from './middleware-turbopack'
 import { PageNotFoundError } from '../../shared/lib/utils'
 import { debounce } from '../utils'
+import { clearManifestCache } from '../load-manifest.external'
 import { deleteCache } from './require-cache'
 import {
   clearAllModuleContexts,
@@ -169,12 +170,45 @@ declare global {
   var __turbopack_server_hmr_handlers__: Map<string, unknown> | undefined
 }
 
+/**
+ * Collects the output chunk paths touched by a partial HMR update. Both
+ * single-chunk `EcmascriptMergedUpdate`s and `ChunkListUpdate`s (which nest
+ * per-chunk deltas inside `merged`) are flattened so the manifest cache can be
+ * invalidated for every affected chunk after a successful apply.
+ */
+function collectUpdatedChunkPaths(
+  instruction: NodeJsPartialHmrUpdate['instruction']
+): string[] {
+  const paths = new Set<string>()
+  if (instruction.type === 'EcmascriptMergedUpdate') {
+    for (const chunkPath of Object.keys(instruction.chunks ?? {})) {
+      paths.add(chunkPath)
+    }
+  } else if (instruction.type === 'ChunkListUpdate') {
+    for (const chunkPath of Object.keys(instruction.chunks ?? {})) {
+      paths.add(chunkPath)
+    }
+    for (const merged of instruction.merged ?? []) {
+      for (const chunkPath of Object.keys(merged.chunks ?? {})) {
+        paths.add(chunkPath)
+      }
+    }
+  } else {
+    throw new Error(
+      `[Server HMR] unreachable: unknown HMR instruction type ${(instruction as { type: string }).type}`
+    )
+  }
+  return Array.from(paths)
+}
+
 function setupServerHmr(
   project: Project,
   {
     reEvaluateAllModulesExpensive,
+    onApplied,
   }: {
     reEvaluateAllModulesExpensive: () => void | Promise<void>
+    onApplied: (chunkPaths: string[]) => void | Promise<void>
   }
 ) {
   async function runSubscription() {
@@ -200,8 +234,14 @@ function setupServerHmr(
       }
 
       const instruction = update.instruction
-      if (!instruction || instruction.type !== 'EcmascriptMergedUpdate') {
-        continue
+      if (
+        !instruction ||
+        (instruction.type !== 'EcmascriptMergedUpdate' &&
+          instruction.type !== 'ChunkListUpdate')
+      ) {
+        throw new Error(
+          `[Server HMR] unreachable: unexpected update instruction type ${(instruction as { type: string }).type}`
+        )
       }
 
       // No handler registered yet (before first request, or right after
@@ -217,8 +257,18 @@ function setupServerHmr(
           __turbopack_server_hmr_apply__(update)
         } catch {
           // A matching runtime tried the apply and threw. Evict require.cache
-          // so the next request loads fresh. (A no-match update is a no-op.)
+          // so the next request loads fresh, then skip onApplied. (A no-match
+          // update is a no-op and does not throw.)
           await reEvaluateAllModulesExpensive()
+          continue
+        }
+
+        const updatedChunkPaths = collectUpdatedChunkPaths(instruction)
+        // An empty partial only advances the version state (e.g. the seed
+        // transition or a new endpoint); nothing changed on disk, so don't
+        // invalidate manifests or ping browsers to refetch RSC.
+        if (updatedChunkPaths.length > 0) {
+          await onApplied(updatedChunkPaths)
         }
       } else {
         await reEvaluateAllModulesExpensive()
@@ -579,9 +629,11 @@ export async function createHotReloaderTurbopack(
     } else {
       // Figure out if the server files have changed
       let hasChange = false
+      const currentPaths = new Set<string>()
       for (const { path, contentHash } of writtenEndpoint.serverPaths) {
         // We ignore source maps
         if (path.endsWith('.map')) continue
+        currentPaths.add(path)
         const localKey = `${key}:${path}`
         const localHash = serverPathState.get(localKey)
         const globalHash = serverPathState.get(path)
@@ -602,9 +654,25 @@ export async function createHotReloaderTurbopack(
         }
       }
 
+      const localKeyPrefix = `${key}:`
+      for (const pathKey of serverPathState.keys()) {
+        if (
+          pathKey.startsWith(localKeyPrefix) &&
+          !currentPaths.has(pathKey.slice(localKeyPrefix.length))
+        ) {
+          serverPathState.delete(pathKey)
+          hasChange = true
+        }
+      }
+
       if (!hasChange) {
         return false
       }
+    }
+
+    // Edge does not participate in server HMR.
+    if (writtenEndpoint.type === 'edge') {
+      void clearAllModuleContexts()
     }
 
     const serverPaths = writtenEndpoint.serverPaths.map(({ path: p }) =>
@@ -747,15 +815,22 @@ export async function createHotReloaderTurbopack(
     }
   }
 
-  function sendEnqueuedMessages() {
+  function hasCompilationErrors() {
     for (const [, issueMap] of currentEntryIssues) {
       if (
         [...issueMap.values()].filter((i) => i.severity !== 'warning').length >
         0
       ) {
-        // During compilation errors we want to delay the HMR events until errors are fixed
-        return
+        return true
       }
+    }
+    return false
+  }
+
+  function sendEnqueuedMessages() {
+    if (hasCompilationErrors()) {
+      // During compilation errors we want to delay the HMR events until errors are fixed
+      return
     }
 
     for (const client of [
@@ -1866,6 +1941,7 @@ export async function createHotReloaderTurbopack(
                     force: forceDeleteCache,
                   })
                 },
+                serverFastRefresh,
               },
             })
           } finally {
@@ -2014,6 +2090,18 @@ export async function createHotReloaderTurbopack(
     process.exit(1)
   })
 
+  // Tell browsers to refetch RSC (soft refresh, not full page reload).
+  // Skip while there are outstanding compilation errors: an RSC refetch would
+  // 500 and force a full-page navigation, losing client state (e.g. recovering
+  // from a syntax error). A subsequent successful compile/apply fires this
+  // again to refresh.
+  function notifyServerComponentChanges() {
+    if (hasCompilationErrors()) return
+    hotReloader.send({
+      type: HMR_MESSAGE_SENT_TO_BROWSER.SERVER_COMPONENT_CHANGES,
+    })
+  }
+
   if (serverFastRefresh) {
     setupServerHmr(project, {
       reEvaluateAllModulesExpensive: async () => {
@@ -2040,10 +2128,18 @@ export async function createHotReloaderTurbopack(
 
         resetFetch()
 
-        // Tell browsers to refetch RSC (soft refresh, not full page reload)
-        hotReloader.send({
-          type: HMR_MESSAGE_SENT_TO_BROWSER.SERVER_COMPONENT_CHANGES,
-        })
+        notifyServerComponentChanges()
+      },
+      onApplied: (chunkPaths: string[]) => {
+        // Clear the evalManifest() shared cache for each updated chunk so the
+        // next RSC render picks up the HMR-applied module changes. Unlike
+        // a full restart, this does NOT clear require.cache — the HMR-applied
+        // modules in devModuleCache must persist for dep preservation.
+        for (const chunkPath of chunkPaths) {
+          clearManifestCache(join(distDir, chunkPath))
+        }
+
+        notifyServerComponentChanges()
       },
     })
   }
