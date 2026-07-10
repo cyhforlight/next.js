@@ -106,10 +106,7 @@ import { getSupportedBrowsers } from '../../build/get-supported-browsers'
 import { printBuildErrors } from '../../build/print-build-errors'
 import { receiveBrowserLogsTurbopack } from './browser-logs/receive-logs'
 import { normalizePath } from '../../lib/normalize-path'
-import {
-  seedTurbopackCacheIfNeeded,
-  TurbopackCacheSeedMode,
-} from '../../lib/turbopack-cache-seed'
+import { seedTurbopackCacheIfNeeded } from '../../lib/turbopack-cache-seed'
 import {
   devToolsConfigMiddleware,
   getDevToolsConfig,
@@ -387,7 +384,6 @@ export async function createHotReloaderTurbopack(
     seedTurbopackCacheIfNeeded({
       projectDir: projectPath,
       distDir,
-      mode: TurbopackCacheSeedMode.Dev,
     })
   }
 
