@@ -51,6 +51,8 @@ export function findRootDirAndLockFiles(cwd: string): {
     const currentDir = dirname(lastLockFile)
     const parentDir = dirname(currentDir)
 
+    // If we are in a worktree that is a child of the main repo we stop
+    // at the work tree root (e.g. project/.claude/worktrees/...)
     if (worktreeInfo?.isChild && currentDir === worktreeInfo.worktreeRoot) break
 
     // dirname('/')==='/' so if we happen to reach the FS root (as might happen in a container we need to quit to avoid looping forever
