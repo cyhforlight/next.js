@@ -354,7 +354,7 @@
     "webpack-sources1": "npm:webpack-sources@1.4.3",
     "webpack-sources3": "npm:webpack-sources@3.2.3",
     "write-file-atomic": "7.0.1",
-    "ws": "8.2.3",
+    "ws": "8.21.1",
     "zod": "3.25.76",
     "zod-validation-error": "3.4.0"
   },
