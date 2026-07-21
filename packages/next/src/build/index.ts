@@ -3671,7 +3671,7 @@ export default async function build(
                     ? collectMeta(metadata)
                     : {}
 
-                addPrerenderDynamicRoute(route.pathname, route.pathname, {
+                addPrerenderDynamicRoute(page, route.pathname, {
                   experimentalPPR: isRoutePPREnabled,
                   remainingPrerenderableParams:
                     route.remainingPrerenderableParams,
@@ -3939,7 +3939,7 @@ export default async function build(
 
                     const cacheControl = getCacheControl(localePage)
 
-                    addPrerenderRoute(page, localePage, {
+                    addPrerenderRoute(file, localePage, {
                       initialRevalidateSeconds: cacheControl.revalidate,
                       initialExpireSeconds: cacheControl.expire,
                       experimentalPPR: undefined,
