@@ -412,6 +412,8 @@ export type DynamicPrerenderManifestRouteRuntime = Pick<
   | 'fallbackExpire'
   | 'fallbackSourceRoute'
   | 'fallbackRouteParams'
+  | 'fallbackRootParams'
+  | 'remainingPrerenderableParams'
 >
 
 export type PrerenderManifestRuntime = {
