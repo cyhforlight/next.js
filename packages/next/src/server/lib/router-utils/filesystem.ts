@@ -81,6 +81,7 @@ export type FsOutput = {
   route?: RouteDefinition
   params?: Params
   requestPath?: string
+  rscOnly?: boolean
   error?: Error
 }
 
@@ -664,7 +665,8 @@ export async function setupFsCheck(opts: {
 
     async getItem(
       itemPath: string,
-      requestPath?: string
+      requestPath?: string,
+      rscOnly?: boolean
     ): Promise<FsOutput | null> {
       const originalItemPath = itemPath
       const itemKey = originalItemPath
@@ -925,6 +927,7 @@ export async function setupFsCheck(opts: {
                   itemPath: ensureItemPath,
                   route,
                   requestPath,
+                  rscOnly,
                 })
               } catch (err) {
                 // A disappeared route is not a match. Compilation errors still
