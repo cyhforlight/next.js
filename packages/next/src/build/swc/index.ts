@@ -1156,9 +1156,10 @@ function bindingToApi(
     ): any {
       if (!rule) return rule
       if (rule.loaders) {
-        rule.loaders = rule.loaders.map((item) =>
-          serializeLoaderItem(item, glob)
-        )
+        rule = {
+          ...rule,
+          loaders: rule.loaders.map((item) => serializeLoaderItem(item, glob)),
+        }
       }
       let serializedRule: any = rule
       if (rule.condition != null) {
