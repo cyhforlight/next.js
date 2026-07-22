@@ -475,6 +475,7 @@ export async function createHotReloaderTurbopack(
     encryptionKey,
     dev: true,
     sriEnabled: false,
+    preloadCachedChunks: false,
   })
 
   // Dev specific

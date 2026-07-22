@@ -91,6 +91,9 @@ const availableModules: Map<ModuleId, Promise<any> | true> = new Map()
 
 const availableModuleChunks: Map<ChunkPath, Promise<any> | true> = new Map()
 
+// HTTP-cached but not yet loaded; treated as cheaply available by the split-vs-whole heuristic.
+const httpCachedChunks: Set<ChunkPath> = new Set()
+
 // Registry mapping a merged chunk's path to its constituent component chunk paths.
 const chunkComponents: Map<ChunkPath, ChunkPath[]> = new Map()
 
@@ -108,6 +111,7 @@ function registerComponentChunkSizes(
       componentChunkSizes.set(componentChunks[i], size)
     }
   }
+  scheduleChunkPreload()
 }
 
 type ChunkUrlOrMerged = ChunkUrl | [ChunkUrl, ChunkPath[], number[]]
@@ -224,23 +228,32 @@ function loadComponentChunksOrWhole(
 ): Promise<unknown> {
   const componentChunkPromises: Array<Promise<any> | true> = []
   let availableBytes = 0
+  let availableCount = 0
   let unavailableCount = 0
   for (const componentChunk of componentChunks) {
     const available = availableModuleChunks.get(componentChunk)
     if (available) {
       componentChunkPromises.push(available)
       availableBytes += componentChunkSizes.get(componentChunk) ?? 0
+      availableCount++
+    } else if (httpCachedChunks.has(componentChunk)) {
+      // Disk-cached: count bytes as available, not request cost.
+      availableBytes += componentChunkSizes.get(componentChunk) ?? 0
+      availableCount++
     } else {
       unavailableCount++
     }
   }
 
+  // Components missing but the whole merged chunk is cached: one cached request beats N fetches.
+  const wholeChunkCached =
+    unavailableCount > 0 && httpCachedChunks.has(chunkUrlToPath(chunkUrl))
   if (
-    componentChunkPromises.length > 0 &&
+    !wholeChunkCached &&
+    availableCount > 0 &&
     shouldLoadComponentChunks(availableBytes, unavailableCount)
   ) {
-    // Enough component chunks are already loaded or loading that splitting saves more
-    // bytes than the extra requests cost.
+    // Enough is loaded or disk-cached that splitting beats the extra requests.
     for (const componentChunk of componentChunks) {
       if (!availableModuleChunks.has(componentChunk)) {
         const promise = loadChunkPath(sourceType, sourceData, componentChunk)
@@ -260,6 +273,93 @@ function loadComponentChunksOrWhole(
     }
   }
   return promise
+}
+
+// --- Background preload of disk-cached component chunks ---
+
+let chunkPreloadScheduled = false
+
+/** Schedules a one-time idle pass that records (not loads) HTTP-cached manifest chunks. */
+function scheduleChunkPreload(): void {
+  if (chunkPreloadScheduled) return
+  // only-if-cached needs a DOM document and fetch.
+  const g = globalThis as any
+  if (typeof g.document === 'undefined' || typeof g.fetch !== 'function') {
+    return
+  }
+  chunkPreloadScheduled = true
+
+  // only-if-cached is same-origin only; skip CDN assets.
+  if (!chunkAssetsAreSameOrigin(g)) {
+    return
+  }
+
+  const start = () => {
+    void probeCachedChunks()
+  }
+  if (typeof g.requestIdleCallback === 'function') {
+    g.requestIdleCallback(start)
+  } else {
+    setTimeout(start, 1000)
+  }
+}
+
+/** App-wide chunk list from `__TURBOPACK_CHUNK_PRELOAD_URL` (mixed URLs and paths); [] on failure. */
+async function fetchChunkPreloadManifest(): Promise<string[]> {
+  const url = (globalThis as any).__TURBOPACK_CHUNK_PRELOAD_URL as
+    | string
+    | undefined
+  if (!url) return []
+  try {
+    const response = await fetch(url)
+    if (!response.ok) return []
+    return (await response.json()) as string[]
+  } catch {
+    return []
+  }
+}
+
+/** Records (without loading) manifest chunks found in the HTTP cache. */
+async function probeCachedChunks(): Promise<void> {
+  const chunks = await fetchChunkPreloadManifest()
+  for (const chunk of chunks) {
+    // Normalize URL-or-path entries to the path keys the loader checks.
+    const chunkPath = chunkUrlToPath(chunk as ChunkUrl)
+    if (
+      availableModuleChunks.has(chunkPath) ||
+      httpCachedChunks.has(chunkPath)
+    ) {
+      continue
+    }
+    if (await isChunkInHttpCache(getChunkRelativeUrl(chunkPath))) {
+      httpCachedChunks.add(chunkPath)
+    }
+  }
+}
+
+/** Whether `url` is in the HTTP cache; only-if-cached serves a cached response or errors on a miss. */
+async function isChunkInHttpCache(url: ChunkUrl): Promise<boolean> {
+  try {
+    const response = await fetch(url, {
+      method: 'GET',
+      mode: 'same-origin',
+      cache: 'only-if-cached',
+    })
+    return response.ok
+  } catch {
+    return false
+  }
+}
+
+/** Whether chunk assets resolve to the document's origin (CHUNK_BASE_PATH may be a CDN URL). */
+function chunkAssetsAreSameOrigin(g: any): boolean {
+  try {
+    return (
+      new URL(CHUNK_BASE_PATH, g.location.href).origin === g.location.origin
+    )
+  } catch {
+    return false
+  }
 }
 
 const loadedChunk = Promise.resolve(undefined)

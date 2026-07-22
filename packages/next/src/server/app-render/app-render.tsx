@@ -3327,6 +3327,17 @@ async function renderToStream(
       (await getInstantTestBootstrapScriptContent())
   }
 
+  if (buildManifest.chunkPreloadManifestPath) {
+    const chunkPreloadManifestUrl = `${assetPrefix}/_next/${
+      buildManifest.chunkPreloadManifestPath
+    }${getAssetQueryString(ctx, false)}`
+    bootstrapScriptContent =
+      (bootstrapScriptContent ? `${bootstrapScriptContent};` : '') +
+      `self.__TURBOPACK_CHUNK_PRELOAD_URL=${JSON.stringify(
+        chunkPreloadManifestUrl
+      )}`
+  }
+
   // Create the "render route (app)" span manually so we can keep it open during streaming.
   // This is necessary because errors inside Suspense boundaries are reported asynchronously
   // during stream consumption, after a typical wrapped function would have ended the span.
