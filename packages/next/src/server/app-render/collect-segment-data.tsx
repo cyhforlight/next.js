@@ -14,7 +14,7 @@ import {
 import {
   readVaryParams,
   type VaryParamsIterable,
-} from '../../shared/lib/segment-cache/vary-params-decoding'
+} from '../../shared/lib/segment-cache/response-decoding'
 import type { ManifestNode } from '../../build/webpack/plugins/flight-manifest-plugin'
 
 // eslint-disable-next-line import/no-extraneous-dependencies

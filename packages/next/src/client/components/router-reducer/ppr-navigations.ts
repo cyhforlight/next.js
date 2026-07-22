@@ -34,12 +34,12 @@ import {
   waitForSegmentCacheEntry,
   markRouteEntryAsDynamicRewrite,
   invalidateRouteCacheEntries,
-  getStaleAt,
   writePrerenderResponseIntoCache,
   processRuntimePrefetchStream,
   writeDynamicRenderResponseIntoCache,
   EntryStatus,
 } from '../segment-cache/cache'
+import { getStaleAt } from '../../../shared/lib/segment-cache/response-decoding'
 import { FetchStrategy } from '../segment-cache/types'
 import { discoverKnownRoute } from '../segment-cache/optimistic-routes'
 import { NEXT_NAV_DEPLOYMENT_ID_HEADER } from '../../../lib/constants'
@@ -1869,7 +1869,10 @@ async function fetchMissingDynamicData(
           if (processed !== null) {
             writeDynamicRenderResponseIntoCache(
               now,
-              FetchStrategy.PPRRuntime,
+              // The effective fetch strategy: PPRRuntime, or PPRNavigation if
+              // the embedded prefetch render reported that nothing was
+              // deferred at the navigation gate.
+              processed.effectiveFetchStrategy,
               processed.flightDatas,
               processed.buildId,
               processed.isResponsePartial,

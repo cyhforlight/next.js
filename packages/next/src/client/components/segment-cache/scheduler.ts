@@ -783,22 +783,40 @@ function pingRootRouteTree(
       // A task's fetch strategy gets set to `PPR` for any "auto" prefetch.
       // If it turned out that the route isn't PPR-enabled, we need to use `LoadingBoundary` instead.
       // We don't need to do this for runtime prefetches, because those are only available in
-      // `cacheComponents`, where every route is PPR.
+      // `cacheComponents`, where every route is PPR. The same goes for
+      // PPRNavigation: although it's a task-level strategy driven by a user
+      // prop (<Link prefetch="navigation">), it's unreachable outside
+      // `cacheComponents`, where getFetchStrategyFromPrefetchIntent maps
+      // 'navigation' to Full instead.
       let fetchStrategy: FetchStrategy
       if (tree.prefetchHints & PrefetchHint.SubtreeHasPartialPrefetching) {
         // If `instant` is defined anywhere on the target route, ignore the
         // fetch strategy and switch to unified strategy used by Cache
         // Components (called `PPR` for now, will likely be renamed).
         //
-        // In practice, this just means that a "full" prefetch (<Link
-        // prefetch={true}>) has no effect. You're meant to use Runtime
-        // Prefetching instead — that's the new pattern that replaces
-        // prefetch={true}.
+        // In practice, this means a "full" prefetch (<Link prefetch={true}>)
+        // no longer issues the legacy full dynamic request. It still has an
+        // effect: it's an explicit per-link opt-in to speculative
+        // prefetching (see subtreeHasSpeculativePrefetch), including the
+        // runtime pass on routes with runtime prefetching enabled.
         //
         // The reason we check for `instant` rather than the `cacheComponents`
         // flag is to support incremental adoption. `prefetch={true}` will
         // continue to work until you opt into `instant`.
-        fetchStrategy = FetchStrategy.PPR
+        //
+        // PPRNavigation (<Link prefetch="navigation">) is deliberately NOT
+        // overridden here: it already uses the unified Cache Components flow
+        // (a static pass, then a runtime pass); the only difference from PPR
+        // is the depth of the runtime pass. Whether the runtime pass runs at
+        // all is gated separately below on the SubtreeHasRuntimePrefetch
+        // hint, so on routes without runtime prefetching enabled it degrades
+        // to the `prefetch={true}` behavior — the speculative static pass
+        // still runs, only the runtime pass is dropped (with a dev-only
+        // warning at navigation time; see navigateToKnownRoute).
+        fetchStrategy =
+          task.fetchStrategy === FetchStrategy.PPRNavigation
+            ? FetchStrategy.PPRNavigation
+            : FetchStrategy.PPR
       } else if (task.fetchStrategy === FetchStrategy.PPR) {
         fetchStrategy = route.supportsPerSegmentPrefetching
           ? FetchStrategy.PPR
@@ -808,6 +826,13 @@ function pingRootRouteTree(
       }
 
       switch (fetchStrategy) {
+        // PPRNavigation follows the same flow as PPR. The only difference is
+        // that when the runtime pass fires (gated on the
+        // SubtreeHasRuntimePrefetch hint, exactly like PPRRuntime), it
+        // requests navigation depth instead of runtime depth. On routes
+        // without runtime prefetching enabled, no runtime pass happens and
+        // the strategy degrades to the `prefetch={true}` behavior.
+        case FetchStrategy.PPRNavigation:
         case FetchStrategy.PPR: {
           // For Cache Components pages, each segment may be prefetched
           // statically or using a runtime request, based on various
@@ -864,7 +889,12 @@ function pingRootRouteTree(
             const runtimeStrategy =
               task.phase === PrefetchPhase.Shell
                 ? FetchStrategy.RuntimeShell
-                : FetchStrategy.PPRRuntime
+                : fetchStrategy === FetchStrategy.PPRNavigation
+                  ? // Navigation-depth runtime prefetch: same request flow as
+                    // PPRRuntime, but the server renders through
+                    // `unstable_navigation()` (prefetch header '4').
+                    FetchStrategy.PPRNavigation
+                  : FetchStrategy.PPRRuntime
 
             // spawnedRuntimePrefetches was populated during the traversal
             // above: every segment in the new part of the tree that is a
@@ -1007,6 +1037,7 @@ function pingRuntimeHead(
   fetchStrategy:
     | FetchStrategy.Full
     | FetchStrategy.PPRRuntime
+    | FetchStrategy.PPRNavigation
     | FetchStrategy.RuntimeShell
     | FetchStrategy.LoadingBoundary
 ): void {
@@ -1485,6 +1516,7 @@ function pingRouteTreeAndIncludeDynamicData(
   fetchStrategy:
     | FetchStrategy.Full
     | FetchStrategy.PPRRuntime
+    | FetchStrategy.PPRNavigation
     | FetchStrategy.RuntimeShell
 ): FlightRouterState {
   // The tree we're constructing is the same shape as the tree we're navigating
@@ -1633,7 +1665,10 @@ function pingRuntimePrefetches(
   tree: RouteTree,
   spawnedRuntimePrefetches: Set<SegmentRequestKey>,
   spawnedEntries: Map<SegmentRequestKey, PendingSegmentCacheEntry>,
-  fetchStrategy: FetchStrategy.PPRRuntime | FetchStrategy.RuntimeShell
+  fetchStrategy:
+    | FetchStrategy.PPRRuntime
+    | FetchStrategy.PPRNavigation
+    | FetchStrategy.RuntimeShell
 ): FlightRouterState {
   // Construct a request tree (FlightRouterState) for a runtime prefetch. If
   // a segment is part of the runtime prefetch, the tree is constructed by
@@ -1964,6 +1999,7 @@ function pingFullSegmentRevalidation(
   fetchStrategy:
     | FetchStrategy.Full
     | FetchStrategy.PPRRuntime
+    | FetchStrategy.PPRNavigation
     | FetchStrategy.RuntimeShell
 ): PendingSegmentCacheEntry | null {
   const revalidatingSegment = readOrCreateRevalidatingSegmentEntry(
@@ -2068,8 +2104,14 @@ export function subtreeHasSpeculativePrefetch(
   prefetchHints: number
 ): boolean {
   return (
-    // Check if this is a "full" prefetch (<Link prefetch={true}>).
+    // Check if this is a "full" prefetch (<Link prefetch={true}>) or a
+    // navigation-depth prefetch (<Link prefetch="navigation">). Both are
+    // explicit per-link opt-ins to speculative prefetching. Note this is
+    // purely about the link's intent — whether the route can actually serve
+    // a runtime prefetch is a capability question handled by the runtime
+    // pass, which is gated on the route's runtime prefetch hints separately.
     fetchStrategy === FetchStrategy.Full ||
+    fetchStrategy === FetchStrategy.PPRNavigation ||
     // Check if something in this subtree is configured to be eagerly
     // prefetched at the route level. Segments that don't opt into Partial
     // Prefetching are marked eager, so a route without any Partial Prefetching

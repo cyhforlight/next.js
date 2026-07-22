@@ -10,15 +10,21 @@ import type {
 } from '../../../shared/lib/app-router-types'
 import { PrefetchHint } from '../../../shared/lib/app-router-types'
 import {
+  getStaleAt,
+  getStaleAtFromHeader,
+  getStaleTimeMs,
+  readEarliestDeferredRenderStage,
   readVaryParams,
+  stripIsPartialByte,
+  STATIC_STALETIME_MS,
   type VaryParams,
   type VaryParamsIterable,
-} from '../../../shared/lib/segment-cache/vary-params-decoding'
+} from '../../../shared/lib/segment-cache/response-decoding'
+import type { RenderStage } from '../../../shared/lib/render-stage'
 import {
   NEXT_DID_POSTPONE_HEADER,
   NEXT_ROUTER_PREFETCH_HEADER,
   NEXT_ROUTER_SEGMENT_PREFETCH_HEADER,
-  NEXT_ROUTER_STALE_TIME_HEADER,
   NEXT_ROUTER_STATE_TREE_HEADER,
   NEXT_URL,
   RSC_CONTENT_TYPE_HEADER,
@@ -103,7 +109,6 @@ import {
   normalizeFlightData,
   prepareFlightRouterStateForRequest,
 } from '../../flight-data-helpers'
-import { STATIC_STALETIME_MS } from '../router-reducer/reducers/navigate-reducer'
 import { pingVisibleLinks } from '../links'
 import { PAGE_SEGMENT_KEY } from '../../../shared/lib/segment'
 import { FetchStrategy } from './types'
@@ -113,14 +118,6 @@ import { discoverKnownRoute, matchKnownRoute } from './optimistic-routes'
 import { convertServerPatchToFullTree, type NavigationSeed } from './navigation'
 import { getNavigationBuildId } from '../../navigation-build-id'
 import { NEXT_NAV_DEPLOYMENT_ID_HEADER } from '../../../lib/constants'
-
-/**
- * Ensures a minimum stale time of 30s to avoid issues where the server sends a too
- * short-lived stale time, which would prevent anything from being prefetched.
- */
-export function getStaleTimeMs(staleTimeSeconds: number): number {
-  return Math.max(staleTimeSeconds, 30) * 1000
-}
 
 // A note on async/await when working in the prefetch cache:
 //
@@ -235,6 +232,15 @@ export type RouteCacheEntry =
   | RejectedRouteCacheEntry
 
 type SegmentCacheEntryShared = {
+  /**
+   * The fetch strategy this entry's content EFFECTIVELY corresponds to,
+   * which may be deeper than the strategy that requested it. E.g. a
+   * PPRRuntime prefetch whose response reports that nothing was deferred is
+   * navigation-complete, so its entries are recorded as PPRNavigation (see
+   * `getEffectiveRuntimePrefetchStrategy`). Compared via
+   * `canNewFetchStrategyProvideMoreContent` to decide whether a new request
+   * could yield more content than what's already cached.
+   */
   fetchStrategy: FetchStrategy
 
   /**
@@ -1104,6 +1110,11 @@ export function upgradeToPendingSegment(
     // We can assume the response will contain the full segment data. Set this
     // to false so we know it's OK to omit this segment from any navigation
     // requests that may happen while the data is still pending.
+    //
+    // Note: PPRNavigation deliberately does NOT get this treatment. A
+    // navigation-depth prefetch renders through `unstable_navigation()`, but
+    // real dynamic APIs (`connection()`, etc.) still hang, so the response
+    // may still contain dynamic holes. Only Full implies completeness.
     pendingEntry.isPartial = false
   }
 
@@ -2494,6 +2505,7 @@ export async function fetchSegmentPrefetchesUsingDynamicRequest(
   fetchStrategy:
     | FetchStrategy.LoadingBoundary
     | FetchStrategy.PPRRuntime
+    | FetchStrategy.PPRNavigation
     | FetchStrategy.RuntimeShell
     | FetchStrategy.Full,
   dynamicRequestTree: FlightRouterState,
@@ -2532,6 +2544,13 @@ export async function fetchSegmentPrefetchesUsingDynamicRequest(
     }
     case FetchStrategy.PPRRuntime: {
       headers[NEXT_ROUTER_PREFETCH_HEADER] = '2'
+      break
+    }
+    case FetchStrategy.PPRNavigation: {
+      // Navigation-depth runtime prefetch: same runtime prefetch code path
+      // as '2' on the server, but the render is allowed to proceed through
+      // `unstable_navigation()`.
+      headers[NEXT_ROUTER_PREFETCH_HEADER] = '4'
       break
     }
     case FetchStrategy.RuntimeShell: {
@@ -2727,14 +2746,18 @@ export async function fetchSegmentPrefetchesUsingDynamicRequest(
       rootVaryParamsIterable
     )
 
-    // PPRRuntime and RuntimeShell prefetches are partial when the server
-    // marks the response as '~' (Partial). RuntimeShell additionally omits
-    // every dynamic suspense boundary below the App Shell, so its segments
-    // are always partial regardless of what the server marker says.
-    // Full/LoadingBoundary prefetches are always complete.
+    // PPRRuntime/PPRNavigation and RuntimeShell prefetches are partial when
+    // the server marks the response as '~' (Partial). RuntimeShell
+    // additionally omits every dynamic suspense boundary below the App Shell,
+    // so its segments are always partial regardless of what the server marker
+    // says. Full/LoadingBoundary prefetches are always complete. (Note that a
+    // navigation-depth prefetch can still be partial: it renders through
+    // `unstable_navigation()`, but real dynamic APIs like `connection()`
+    // still hang.)
     const isResponsePartial =
       fetchStrategy === FetchStrategy.RuntimeShell ||
-      (fetchStrategy === FetchStrategy.PPRRuntime &&
+      ((fetchStrategy === FetchStrategy.PPRRuntime ||
+        fetchStrategy === FetchStrategy.PPRNavigation) &&
         (cacheData?.isResponsePartial ?? false))
 
     const flightDatas = normalizeFlightData(
@@ -2752,12 +2775,37 @@ export async function fetchSegmentPrefetchesUsingDynamicRequest(
       // Not needed for prefetch responses; pass unknown to use the default.
       UnknownDynamicStaleTime
     )
+    // Effective-stage recording: a runtime prefetch response reports the
+    // earliest render stage whose content was deferred (e.g.
+    // `RenderStage.Dynamic` when an `await unstable_navigation()` hung), or
+    // null if nothing was deferred. If nothing was deferred, the response is
+    // navigation-complete by construction, so we record the resulting entries
+    // at the deeper PPRNavigation level even though the request was only
+    // runtime-depth. This lets `canNewFetchStrategyProvideMoreContent` know
+    // that a subsequent navigation-depth prefetch of the same segments would
+    // not yield anything more. The recording is deliberately per-response:
+    // one minimum for all entries in the response, which is conservative.
+    // Note this is deliberately NOT applied to RuntimeShell responses: shell
+    // entries are truncated at the shell stage (and rendered with non-root
+    // params omitted), so they can never be navigation-complete regardless
+    // of what the gate reported.
+    //
+    // We read `serverData.n` only after `getStaleAt` (above) has drained the
+    // staleTime iterable — which completes at the end of the stream — so the
+    // promise is settled by now if it's ever going to be (see
+    // readEarliestDeferredRenderStage for the abort case).
+    const effectiveFetchStrategy =
+      fetchStrategy === FetchStrategy.PPRRuntime ||
+      fetchStrategy === FetchStrategy.PPRNavigation
+        ? getEffectiveRuntimePrefetchStrategy(fetchStrategy, serverData.n)
+        : fetchStrategy
+
     // Aside from writing the data into the cache, this function also returns
     // the entries that were fulfilled, so we can streamingly update their sizes
     // in the LRU as more data comes in.
     fulfilledEntries = writeDynamicRenderResponseIntoCache(
       now,
-      fetchStrategy,
+      effectiveFetchStrategy,
       flightDatas,
       buildId,
       isResponsePartial,
@@ -2922,10 +2970,15 @@ function rejectSegmentEntriesIfStillPending(
 
 export function writeDynamicRenderResponseIntoCache(
   now: number,
+  // For runtime prefetch responses, this is the *effective* fetch strategy —
+  // the requested strategy, possibly upgraded to PPRNavigation when the
+  // response reported that nothing was deferred during the render. See
+  // getEffectiveRuntimePrefetchStrategy.
   fetchStrategy:
     | FetchStrategy.LoadingBoundary
     | FetchStrategy.PPR
     | FetchStrategy.PPRRuntime
+    | FetchStrategy.PPRNavigation
     | FetchStrategy.RuntimeShell
     | FetchStrategy.Full,
   flightDatas: NormalizedFlightData[],
@@ -3044,6 +3097,7 @@ function writeSeedDataIntoCache(
     | FetchStrategy.LoadingBoundary
     | FetchStrategy.PPR
     | FetchStrategy.PPRRuntime
+    | FetchStrategy.PPRNavigation
     | FetchStrategy.RuntimeShell
     | FetchStrategy.Full,
   tree: RouteTree,
@@ -3106,6 +3160,7 @@ function fulfillEntrySpawnedByRuntimePrefetch(
     | FetchStrategy.LoadingBoundary
     | FetchStrategy.PPR
     | FetchStrategy.PPRRuntime
+    | FetchStrategy.PPRNavigation
     | FetchStrategy.RuntimeShell
     | FetchStrategy.Full,
   rsc: React.ReactNode,
@@ -3157,6 +3212,12 @@ function fulfillEntrySpawnedByRuntimePrefetch(
       ? entriesOwnedByCurrentTask.get(tree.requestKey)
       : undefined
   if (ownedEntry !== undefined) {
+    // Record the effective fetch strategy on the entry. This is usually the
+    // same strategy the entry was spawned with, but a runtime prefetch
+    // response may have been upgraded to PPRNavigation if nothing was
+    // deferred during the render (see
+    // getEffectiveRuntimePrefetchStrategy).
+    ownedEntry.fetchStrategy = fetchStrategy
     const fulfilledEntry = fulfillSegmentCacheEntry(
       ownedEntry,
       rsc,
@@ -3397,6 +3458,7 @@ function addSegmentPathToUrlInOutputExportMode(
  * - `LoadingBoundary` only provides static layouts
  * - `PPR` can provide shells for each segment (even for segments that use dynamic data)
  * - `PPRRuntime` can additionally include content that uses searchParams, params, or cookies
+ * - `PPRNavigation` can additionally include content gated on `unstable_navigation()`
  * - `Full` includes all the content, even if it uses dynamic data
  *
  * However, it's possible that a more specific fetch strategy *won't* give us more content if:
@@ -3407,6 +3469,9 @@ function addSegmentPathToUrlInOutputExportMode(
  * Because of this, when comparing two segments, we should also check if the existing segment is partial.
  * If it's not partial, then there's no need to prefetch it again, even using a "more specific" strategy.
  * There's currently no way to know if `PPRRuntime` will yield more data that `PPR`, so we have to assume it will.
+ * `PPRRuntime` vs `PPRNavigation` is the exception: a runtime prefetch response records the earliest render stage
+ * whose content was deferred, and entries from a response where nothing was deferred are recorded
+ * as `PPRNavigation` directly (see getEffectiveRuntimePrefetchStrategy), so this comparison stays accurate.
  *
  * Also note that, in practice, we don't expect to be comparing `LoadingBoundary` to `PPR`/`PPRRuntime`,
  * because a non-PPR-enabled route wouldn't ever use the latter strategies. It might however use `Full`.
@@ -3418,61 +3483,39 @@ export function canNewFetchStrategyProvideMoreContent(
   return currentStrategy < newStrategy
 }
 
-function getStaleAtFromHeader(
-  now: number,
-  response: RSCResponse<unknown>
-): number {
-  const staleTimeSeconds = parseInt(
-    response.headers.get(NEXT_ROUTER_STALE_TIME_HEADER) ?? '',
-    10
-  )
-
-  const staleTimeMs = !isNaN(staleTimeSeconds)
-    ? getStaleTimeMs(staleTimeSeconds)
-    : STATIC_STALETIME_MS
-
-  return now + staleTimeMs
-}
-
 /**
- * Reads the stale time from an async iterable or a response header and
- * returns a staleAt timestamp.
+ * Computes the *effective* fetch strategy to record on the cache entries
+ * produced by a runtime prefetch response:
  *
- * TODO: Buffer the response and then read the iterable values
- * synchronously, similar to readVaryParams. This would avoid the need to
- * make this async, and we could also use it in
- * writeDynamicTreeResponseIntoCache. This will also be needed when React
- * starts leaving async iterables hanging when the outer RSC stream is
- * aborted e.g. due to sync I/O (with unstable_allowPartialStream).
+ * - Requested at PPRNavigation ('4'): the render was allowed through the
+ *   navigation gate, so the entries are navigation-complete by construction.
+ *   (A reported deferral cannot happen with the current stage set; if the
+ *   server sent one anyway, we still record PPRNavigation, matching what the
+ *   request asked for.)
+ * - Requested at PPRRuntime ('2') and nothing was deferred during the render
+ *   (`earliestDeferredRenderStage` is null): the response is
+ *   navigation-complete by construction, so record the entries at
+ *   PPRNavigation. A later navigation-depth prefetch of the same segments
+ *   would yield nothing more, and `canNewFetchStrategyProvideMoreContent`
+ *   will correctly skip it.
+ * - Requested at PPRRuntime and something was deferred: record as requested.
+ *
+ * This does not affect `isPartial` — a navigation-complete response can still
+ * contain dynamic holes from `connection()` etc., which is what the isPartial
+ * marker byte tracks.
  */
-export async function getStaleAt(
-  now: number,
-  staleTimeIterable: AsyncIterable<number> | undefined,
-  response?: RSCResponse<unknown>
-): Promise<number> {
-  if (staleTimeIterable !== undefined) {
-    // Iterate the async iterable and take the last yielded value. The server
-    // yields updated staleTime values during the render; the last one is the
-    // final staleTime.
-    let staleTimeSeconds: number | undefined
-    for await (const value of staleTimeIterable) {
-      staleTimeSeconds = value
-    }
-
-    if (staleTimeSeconds !== undefined) {
-      const staleTimeMs = isNaN(staleTimeSeconds)
-        ? STATIC_STALETIME_MS
-        : getStaleTimeMs(staleTimeSeconds)
-
-      return now + staleTimeMs
-    }
+function getEffectiveRuntimePrefetchStrategy(
+  requestedFetchStrategy:
+    | FetchStrategy.PPRRuntime
+    | FetchStrategy.PPRNavigation,
+  earliestDeferredRenderStage: Promise<RenderStage | null> | undefined
+): FetchStrategy.PPRRuntime | FetchStrategy.PPRNavigation {
+  if (requestedFetchStrategy === FetchStrategy.PPRNavigation) {
+    return FetchStrategy.PPRNavigation
   }
-
-  if (response !== undefined) {
-    return getStaleAtFromHeader(now, response)
-  }
-
-  return now + STATIC_STALETIME_MS
+  return readEarliestDeferredRenderStage(earliestDeferredRenderStage) === null
+    ? FetchStrategy.PPRNavigation
+    : FetchStrategy.PPRRuntime
 }
 
 /**
@@ -3544,6 +3587,7 @@ export async function processRuntimePrefetchStream(
   headVaryParams: VaryParams | null
   rootVaryParamsIterable: VaryParamsIterable | null
   staleAt: number
+  effectiveFetchStrategy: FetchStrategy.PPRRuntime | FetchStrategy.PPRNavigation
 } | null> {
   const { stream, isPartial } = await stripIsPartialByte(runtimePrefetchStream)
 
@@ -3574,6 +3618,19 @@ export async function processRuntimePrefetchStream(
     UnknownDynamicStaleTime
   )
 
+  // Effective-stage recording: an embedded runtime prefetch stream is
+  // runtime-depth, but if the render reported that nothing was deferred
+  // (`earliestDeferredRenderStage` is null), the entries it produces are
+  // navigation-complete and are recorded at PPRNavigation. We read the field
+  // only after `getStaleAt` has drained the staleTime iterable — which
+  // completes at the end of the stream — so the promise is settled by now if
+  // it's ever going to be (see readEarliestDeferredRenderStage for the abort
+  // case).
+  const effectiveFetchStrategy = getEffectiveRuntimePrefetchStrategy(
+    FetchStrategy.PPRRuntime,
+    serverData.n
+  )
+
   return {
     flightDatas,
     navigationSeed,
@@ -3582,64 +3639,6 @@ export async function processRuntimePrefetchStream(
     headVaryParams,
     rootVaryParamsIterable,
     staleAt,
-  }
-}
-
-/**
- * Strips the leading isPartial byte from an RSC response stream.
- *
- * The server prepends a single byte: '~' (0x7e) for partial, '#' (0x23) for
- * complete. These bytes cannot appear as the first byte of a valid RSC Flight
- * response (Flight rows start with a hex digit or ':').
- *
- * If the first byte is not a recognized marker, the stream is returned intact
- * and `isPartial` is determined by the cachedNavigations experimental flag.
- */
-export async function stripIsPartialByte(
-  stream: ReadableStream<Uint8Array>
-): Promise<{ stream: ReadableStream<Uint8Array>; isPartial: boolean }> {
-  // When there is no recognized marker byte, the fallback depends on whether
-  // Cached Navigations is enabled. When enabled, dynamic navigation responses
-  // don't have a marker but may contain dynamic holes, so they are treated as
-  // partial. When disabled, unmarked responses are treated as non-partial.
-  const defaultIsPartial = !!process.env.__NEXT_EXPERIMENTAL_CACHED_NAVIGATIONS
-
-  const reader = stream.getReader()
-  const { done, value } = await reader.read()
-
-  if (done || !value || value.byteLength === 0) {
-    return {
-      stream: new ReadableStream({ start: (c) => c.close() }),
-      isPartial: defaultIsPartial,
-    }
-  }
-
-  const firstByte = value[0]
-  const hasMarker = firstByte === 0x23 || firstByte === 0x7e
-  const isPartial = hasMarker ? firstByte === 0x7e : defaultIsPartial
-
-  const remainder = hasMarker
-    ? value.byteLength > 1
-      ? value.subarray(1)
-      : null
-    : value
-
-  return {
-    isPartial,
-    stream: new ReadableStream<Uint8Array>({
-      start(controller) {
-        if (remainder) {
-          controller.enqueue(remainder)
-        }
-      },
-      async pull(controller) {
-        const result = await reader.read()
-        if (result.done) {
-          controller.close()
-        } else {
-          controller.enqueue(result.value)
-        }
-      },
-    }),
+    effectiveFetchStrategy,
   }
 }

@@ -39,7 +39,16 @@ export const enum FetchStrategy {
   RuntimeShell = 1,
   PPR = 2,
   PPRRuntime = 3,
-  Full = 4,
+  // A navigation-depth runtime prefetch (<Link prefetch="navigation">). Same
+  // request flow as PPRRuntime, but the server renders through
+  // `unstable_navigation()` — content gated only on the navigation stage is
+  // included in the response. Real dynamic APIs (`connection()`, etc.) still
+  // hang, so the response may still be partial; only `Full` implies
+  // completeness. Entries produced by a PPRRuntime request whose response
+  // reports that nothing was deferred at the navigation gate are also
+  // recorded at this level (see `getEffectiveRuntimePrefetchStrategy`).
+  PPRNavigation = 4,
+  Full = 5,
 }
 
 /**
@@ -51,4 +60,5 @@ export const enum FetchStrategy {
 export type PrefetchTaskFetchStrategy =
   | FetchStrategy.PPR
   | FetchStrategy.PPRRuntime
+  | FetchStrategy.PPRNavigation
   | FetchStrategy.Full

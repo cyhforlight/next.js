@@ -17,6 +17,17 @@ export function createUnrenderedSegmentError(
   return new Error(message)
 }
 
+export function createLinkPrefetchNavigationUnavailableError(
+  pathname: string
+): Error {
+  return new Error(
+    `<Link prefetch="navigation"> was used for "${pathname}", but the route does not have runtime prefetching enabled, so the link fell back to the \`prefetch={true}\` behavior.\n\n` +
+      `Ways to fix this:\n` +
+      `  - [enable] Export \`const prefetch = 'allow-runtime'\` from the target page or layout to enable runtime prefetching for the route\n` +
+      `  - [disable] Remove \`prefetch="navigation"\` from the <Link> to use the default prefetch`
+  )
+}
+
 export function createLinkPrefetchPartialError(pathname: string): Error {
   return new Error(
     `Next.js encountered dynamic data during prefetching for "${pathname}".\n\n` +

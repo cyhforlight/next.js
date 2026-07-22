@@ -8,11 +8,11 @@ import { getFlightDataPartsFromPath } from '../../flight-data-helpers'
 import { createInitialCacheNodeForHydration } from './ppr-navigations'
 import {
   convertRootFlightRouterStateToRouteTree,
-  getStaleAt,
   processRuntimePrefetchStream,
   writeDynamicRenderResponseIntoCache,
   writePrerenderResponseIntoCache,
 } from '../segment-cache/cache'
+import { getStaleAt } from '../../../shared/lib/segment-cache/response-decoding'
 import { FetchStrategy } from '../segment-cache/types'
 import {
   UnknownDynamicStaleTime,
@@ -212,7 +212,10 @@ export function createInitialRouterState({
           if (processed !== null) {
             writeDynamicRenderResponseIntoCache(
               Date.now(),
-              FetchStrategy.PPRRuntime,
+              // The effective fetch strategy: PPRRuntime, or PPRNavigation if
+              // the embedded prefetch render reported that nothing was
+              // deferred at the navigation gate.
+              processed.effectiveFetchStrategy,
               processed.flightDatas,
               processed.buildId,
               processed.isResponsePartial,

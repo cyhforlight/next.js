@@ -1,8 +1,10 @@
 import { workAsyncStorage } from '../app-render/work-async-storage.external'
 import {
+  checkAndRecordStageDeferral,
   throwForMissingRequestStore,
   workUnitAsyncStorage,
 } from '../app-render/work-unit-async-storage.external'
+import { RenderStage } from '../app-render/staged-rendering'
 import { applyOwnerStack, makeHangingPromise } from '../dynamic-rendering-utils'
 import { isRequestApiAllowedInCurrentPhase } from './utils'
 import { InvariantError } from '../../shared/lib/invariant-error'
@@ -89,11 +91,19 @@ export function unstable_navigation(): Promise<void> {
           // navigation. Note that this does not mark the subtree as dynamic —
           // the content below is still cacheable and is filled in during the
           // navigation.
-          return makeHangingPromise(
-            workUnitStore.renderSignal,
-            workStore.route,
-            '`unstable_navigation()`'
-          )
+          //
+          // A navigation-depth runtime prefetch, however, is allowed to
+          // render through the navigation gate (real dynamic APIs like
+          // `connection()` still hang), so we resolve immediately in that
+          // case.
+          if (checkAndRecordStageDeferral(workUnitStore, RenderStage.Dynamic)) {
+            return makeHangingPromise(
+              workUnitStore.renderSignal,
+              workStore.route,
+              '`unstable_navigation()`'
+            )
+          }
+          return Promise.resolve(undefined)
         case 'validation-client': {
           // TODO(NAR-789): make this consistent with the actual browser behavior when we change it.
           // Until then, erroring is fine.
