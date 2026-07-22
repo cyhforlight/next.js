@@ -32,6 +32,8 @@
     "legacy",
     "script.js",
     "script.d.ts",
+    "stages.js",
+    "stages.d.ts",
     "server.js",
     "server.d.ts",
     "head.js",
