@@ -675,6 +675,8 @@ export function completeHardNavigation(
     tree: state.tree,
     nextUrl: state.nextUrl,
     previousNextUrl: state.previousNextUrl,
+    // The server-computed matched route only applies to the initial render.
+    initialMatchedRoute: null,
     debugInfo: null,
   }
   return newState
@@ -813,6 +815,8 @@ export function completeSoftNavigation(
     tree,
     nextUrl: nextUrlForNewRoute,
     previousNextUrl,
+    // The server-computed matched route only applies to the initial render.
+    initialMatchedRoute: null,
     debugInfo: collectedDebugInfo,
   }
   return newState
@@ -845,6 +849,8 @@ export function completeTraverseNavigation(
     // Next-Url that was used to fetch the data. Anywhere we fetch using the
     // canonical URL, there should be a corresponding Next-Url.
     previousNextUrl: null,
+    // The server-computed matched route only applies to the initial render.
+    initialMatchedRoute: null,
     debugInfo: null,
   }
 }

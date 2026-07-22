@@ -287,52 +287,52 @@ describe('Cache Components Errors - Client Hook Abort Reasons', () => {
             if (!isTurbopack) {
               if (isDebugPrerender) {
                 expect(output).toMatchInlineSnapshot(`
-                 "Error: Route "/client-hook-abort-reasons/normal/use-search-params/[id]": Next.js encountered uncached or runtime data during prerendering.
+"Error: Route "/client-hook-abort-reasons/normal/use-search-params/[id]": Next.js encountered uncached or runtime data during prerendering.
 
-                 \`fetch(...)\`, \`cookies()\`, \`headers()\`, \`params\`, \`searchParams\`, or \`connection()\` accessed outside of \`<Suspense>\` prevents the route from being prerendered, blocking the page load and leading to a slower user experience.
+\`fetch(...)\`, \`cookies()\`, \`headers()\`, \`params\`, \`searchParams\`, or \`connection()\` accessed outside of \`<Suspense>\` prevents the route from being prerendered, blocking the page load and leading to a slower user experience.
 
-                 Ways to fix this:
-                   - [stream] Provide a placeholder with \`<Suspense fallback={...}>\` around the data access
-                   - [cache] For uncached data (\`fetch\`, database calls): cache the access with \`"use cache"\` (does not apply to \`connection()\`)
-                   - [block] Set \`export const instant = false\` to allow a blocking route
+Ways to fix this:
+  - [stream] Provide a placeholder with \`<Suspense fallback={...}>\` around the data access
+  - [cache] For uncached data (\`fetch\`, database calls): cache the access with \`"use cache"\` (does not apply to \`connection()\`)
+  - [block] Set \`export const instant = false\` to allow a blocking route
 
-                 Learn more: https://nextjs.org/docs/messages/blocking-prerender-dynamic
-                     at DataSlot (webpack:///app/client-hook-abort-reasons/data.tsx:1:23)
-                     at Page (webpack:///app/client-hook-abort-reasons/normal/use-search-params/[id]/page.tsx:7:7)
-                 > 1 | export async function DataSlot() {
-                     |                       ^
-                   2 |   await new Promise((resolve) => setTimeout(resolve, 0))
-                   3 |   return <p>data slot</p>
-                   4 | }
-                 To debug the issue, start the app in development mode by running \`next dev\`, then open "/client-hook-abort-reasons/normal/use-search-params/[id]" in your browser to investigate the error.
-                 Error: Route "/client-hook-abort-reasons/normal/use-search-params/[id]": Next.js encountered URL data \`useSearchParams()\` in a Client Component outside of \`<Suspense>\`.
+Learn more: https://nextjs.org/docs/messages/blocking-prerender-dynamic
+    at DataSlot (webpack:///app/client-hook-abort-reasons/data.tsx:1:23)
+    at Page (webpack:///app/client-hook-abort-reasons/normal/use-search-params/[id]/page.tsx:7:7)
+> 1 | export async function DataSlot() {
+    |                       ^
+  2 |   await new Promise((resolve) => setTimeout(resolve, 0))
+  3 |   return <p>data slot</p>
+  4 | }
+To debug the issue, start the app in development mode by running \`next dev\`, then open "/client-hook-abort-reasons/normal/use-search-params/[id]" in your browser to investigate the error.
+Error: Route "/client-hook-abort-reasons/normal/use-search-params/[id]": Next.js encountered URL data \`useSearchParams()\` in a Client Component outside of \`<Suspense>\`.
 
-                 This blocks prerendering because the value is only available at runtime.
+This blocks prerendering because the value is only available at runtime.
 
-                 Ways to fix this:
-                   - [stream] Wrap the component in \`<Suspense fallback={...}>\` so the hook value streams in after prerendering
-                   - [block] Set \`export const instant = false\` to allow a blocking route
+Ways to fix this:
+  - [stream] Wrap the component in \`<Suspense fallback={...}>\` so the hook value streams in after prerendering
+  - [block] Set \`export const instant = false\` to allow a blocking route
 
-                 Learn more: https://nextjs.org/docs/messages/blocking-prerender-client-hook
-                     at Object.useDynamicSearchParams (webpack:///<next-src>)
-                     at useSearchParams (webpack:///<next-src>)
-                     at UseSearchParams (webpack:///app/client-hook-abort-reasons/client.tsx:27:18)
-                     at Page (webpack:///app/client-hook-abort-reasons/normal/use-search-params/[id]/page.tsx:8:7)
-                   718 |       return
-                   719 |     case 'prerender-client': {
-                 > 720 |       React.use(
-                       |             ^
-                   721 |         makeClientHookHangingPromise(
-                   722 |           workUnitStore.renderSignal,
-                   723 |           new ClientHookDynamicError(workStore.route, expression) {
-                   digest: 'CLIENT_HOOK_DYNAMIC'
-                 }
-                 To debug the issue, start the app in development mode by running \`next dev\`, then open "/client-hook-abort-reasons/normal/use-search-params/[id]" in your browser to investigate the error.
-                 Error occurred prerendering page "/client-hook-abort-reasons/normal/use-search-params/[id]". Read more: https://nextjs.org/docs/messages/prerender-error
+Learn more: https://nextjs.org/docs/messages/blocking-prerender-client-hook
+    at useDynamicSearchParams (webpack:///<next-src>)
+    at useSearchParams (webpack:///<next-src>)
+    at UseSearchParams (webpack:///app/client-hook-abort-reasons/client.tsx:27:18)
+    at Page (webpack:///app/client-hook-abort-reasons/normal/use-search-params/[id]/page.tsx:8:7)
+  54 |   const hangingPromise = trackDynamicSearchParamsAccess?.(expression)
+  55 |   if (hangingPromise !== undefined) {
+> 56 |     use(hangingPromise)
+     |     ^
+  57 |   }
+  58 | }
+  59 | {
+  digest: 'CLIENT_HOOK_DYNAMIC'
+}
+To debug the issue, start the app in development mode by running \`next dev\`, then open "/client-hook-abort-reasons/normal/use-search-params/[id]" in your browser to investigate the error.
+Error occurred prerendering page "/client-hook-abort-reasons/normal/use-search-params/[id]". Read more: https://nextjs.org/docs/messages/prerender-error
 
-                 > Export encountered errors on 1 path:
-                 	/client-hook-abort-reasons/normal/use-search-params/[id]/page: /client-hook-abort-reasons/normal/use-search-params/[id]"
-                `)
+> Export encountered errors on 1 path:
+	/client-hook-abort-reasons/normal/use-search-params/[id]/page: /client-hook-abort-reasons/normal/use-search-params/[id]"
+`)
               } else {
                 expect(output).toMatchInlineSnapshot(`
                  "Error: Route "/client-hook-abort-reasons/normal/use-search-params/[id]": Next.js encountered URL data \`useSearchParams()\` in a Client Component outside of \`<Suspense>\`.
@@ -577,52 +577,52 @@ describe('Cache Components Errors - Client Hook Abort Reasons', () => {
             if (!isTurbopack) {
               if (isDebugPrerender) {
                 expect(output).toMatchInlineSnapshot(`
-                 "Error: Route "/client-hook-abort-reasons/normal/use-pathname/[id]": Next.js encountered uncached or runtime data during prerendering.
+"Error: Route "/client-hook-abort-reasons/normal/use-pathname/[id]": Next.js encountered uncached or runtime data during prerendering.
 
-                 \`fetch(...)\`, \`cookies()\`, \`headers()\`, \`params\`, \`searchParams\`, or \`connection()\` accessed outside of \`<Suspense>\` prevents the route from being prerendered, blocking the page load and leading to a slower user experience.
+\`fetch(...)\`, \`cookies()\`, \`headers()\`, \`params\`, \`searchParams\`, or \`connection()\` accessed outside of \`<Suspense>\` prevents the route from being prerendered, blocking the page load and leading to a slower user experience.
 
-                 Ways to fix this:
-                   - [stream] Provide a placeholder with \`<Suspense fallback={...}>\` around the data access
-                   - [cache] For uncached data (\`fetch\`, database calls): cache the access with \`"use cache"\` (does not apply to \`connection()\`)
-                   - [block] Set \`export const instant = false\` to allow a blocking route
+Ways to fix this:
+  - [stream] Provide a placeholder with \`<Suspense fallback={...}>\` around the data access
+  - [cache] For uncached data (\`fetch\`, database calls): cache the access with \`"use cache"\` (does not apply to \`connection()\`)
+  - [block] Set \`export const instant = false\` to allow a blocking route
 
-                 Learn more: https://nextjs.org/docs/messages/blocking-prerender-dynamic
-                     at DataSlot (webpack:///app/client-hook-abort-reasons/data.tsx:1:23)
-                     at Page (webpack:///app/client-hook-abort-reasons/normal/use-pathname/[id]/page.tsx:8:7)
-                 > 1 | export async function DataSlot() {
-                     |                       ^
-                   2 |   await new Promise((resolve) => setTimeout(resolve, 0))
-                   3 |   return <p>data slot</p>
-                   4 | }
-                 To debug the issue, start the app in development mode by running \`next dev\`, then open "/client-hook-abort-reasons/normal/use-pathname/[id]" in your browser to investigate the error.
-                 Error: Route "/client-hook-abort-reasons/normal/use-pathname/[id]": Next.js encountered URL data \`usePathname()\` in a Client Component outside of \`<Suspense>\`.
+Learn more: https://nextjs.org/docs/messages/blocking-prerender-dynamic
+    at DataSlot (webpack:///app/client-hook-abort-reasons/data.tsx:1:23)
+    at Page (webpack:///app/client-hook-abort-reasons/normal/use-pathname/[id]/page.tsx:8:7)
+> 1 | export async function DataSlot() {
+    |                       ^
+  2 |   await new Promise((resolve) => setTimeout(resolve, 0))
+  3 |   return <p>data slot</p>
+  4 | }
+To debug the issue, start the app in development mode by running \`next dev\`, then open "/client-hook-abort-reasons/normal/use-pathname/[id]" in your browser to investigate the error.
+Error: Route "/client-hook-abort-reasons/normal/use-pathname/[id]": Next.js encountered URL data \`usePathname()\` in a Client Component outside of \`<Suspense>\`.
 
-                 This blocks prerendering because the value is only available at runtime.
+This blocks prerendering because the value is only available at runtime.
 
-                 Ways to fix this:
-                   - [stream] Wrap the component in \`<Suspense fallback={...}>\` so the hook value streams in after prerendering
-                   - [block] Set \`export const instant = false\` to allow a blocking route
+Ways to fix this:
+  - [stream] Wrap the component in \`<Suspense fallback={...}>\` so the hook value streams in after prerendering
+  - [block] Set \`export const instant = false\` to allow a blocking route
 
-                 Learn more: https://nextjs.org/docs/messages/blocking-prerender-client-hook
-                     at Object.useDynamicRouteParams (webpack:///<next-src>)
-                     at usePathname (webpack:///<next-src>)
-                     at UsePathname (webpack:///app/client-hook-abort-reasons/client.tsx:22:14)
-                     at Page (webpack:///app/client-hook-abort-reasons/normal/use-pathname/[id]/page.tsx:7:7)
-                   647 |           // hang here and never resolve. This will cause the currently
-                   648 |           // rendering component to effectively be a dynamic hole.
-                 > 649 |           React.use(
-                       |                 ^
-                   650 |             makeClientHookHangingPromise(
-                   651 |               workUnitStore.renderSignal,
-                   652 |               new ClientHookDynamicError(workStore.route, expression) {
-                   digest: 'CLIENT_HOOK_DYNAMIC'
-                 }
-                 To debug the issue, start the app in development mode by running \`next dev\`, then open "/client-hook-abort-reasons/normal/use-pathname/[id]" in your browser to investigate the error.
-                 Error occurred prerendering page "/client-hook-abort-reasons/normal/use-pathname/[id]". Read more: https://nextjs.org/docs/messages/prerender-error
+Learn more: https://nextjs.org/docs/messages/blocking-prerender-client-hook
+    at useDynamicRouteParams (webpack:///<next-src>)
+    at usePathname (webpack:///<next-src>)
+    at UsePathname (webpack:///app/client-hook-abort-reasons/client.tsx:22:14)
+    at Page (webpack:///app/client-hook-abort-reasons/normal/use-pathname/[id]/page.tsx:7:7)
+  43 |   const hangingPromise = trackDynamicRouteParamsAccess?.(expression)
+  44 |   if (hangingPromise !== undefined) {
+> 45 |     use(hangingPromise)
+     |     ^
+  46 |   }
+  47 | }
+  48 | {
+  digest: 'CLIENT_HOOK_DYNAMIC'
+}
+To debug the issue, start the app in development mode by running \`next dev\`, then open "/client-hook-abort-reasons/normal/use-pathname/[id]" in your browser to investigate the error.
+Error occurred prerendering page "/client-hook-abort-reasons/normal/use-pathname/[id]". Read more: https://nextjs.org/docs/messages/prerender-error
 
-                 > Export encountered errors on 1 path:
-                 	/client-hook-abort-reasons/normal/use-pathname/[id]/page: /client-hook-abort-reasons/normal/use-pathname/[id]"
-                `)
+> Export encountered errors on 1 path:
+	/client-hook-abort-reasons/normal/use-pathname/[id]/page: /client-hook-abort-reasons/normal/use-pathname/[id]"
+`)
               } else {
                 expect(output).toMatchInlineSnapshot(`
                  "Error: Route "/client-hook-abort-reasons/normal/use-pathname/[id]": Next.js encountered URL data \`usePathname()\` in a Client Component outside of \`<Suspense>\`.
@@ -867,52 +867,52 @@ describe('Cache Components Errors - Client Hook Abort Reasons', () => {
             if (!isTurbopack) {
               if (isDebugPrerender) {
                 expect(output).toMatchInlineSnapshot(`
-                 "Error: Route "/client-hook-abort-reasons/normal/use-params/[id]": Next.js encountered uncached or runtime data during prerendering.
+"Error: Route "/client-hook-abort-reasons/normal/use-params/[id]": Next.js encountered uncached or runtime data during prerendering.
 
-                 \`fetch(...)\`, \`cookies()\`, \`headers()\`, \`params\`, \`searchParams\`, or \`connection()\` accessed outside of \`<Suspense>\` prevents the route from being prerendered, blocking the page load and leading to a slower user experience.
+\`fetch(...)\`, \`cookies()\`, \`headers()\`, \`params\`, \`searchParams\`, or \`connection()\` accessed outside of \`<Suspense>\` prevents the route from being prerendered, blocking the page load and leading to a slower user experience.
 
-                 Ways to fix this:
-                   - [stream] Provide a placeholder with \`<Suspense fallback={...}>\` around the data access
-                   - [cache] For uncached data (\`fetch\`, database calls): cache the access with \`"use cache"\` (does not apply to \`connection()\`)
-                   - [block] Set \`export const instant = false\` to allow a blocking route
+Ways to fix this:
+  - [stream] Provide a placeholder with \`<Suspense fallback={...}>\` around the data access
+  - [cache] For uncached data (\`fetch\`, database calls): cache the access with \`"use cache"\` (does not apply to \`connection()\`)
+  - [block] Set \`export const instant = false\` to allow a blocking route
 
-                 Learn more: https://nextjs.org/docs/messages/blocking-prerender-dynamic
-                     at DataSlot (webpack:///app/client-hook-abort-reasons/data.tsx:1:23)
-                     at Page (webpack:///app/client-hook-abort-reasons/normal/use-params/[id]/page.tsx:7:7)
-                 > 1 | export async function DataSlot() {
-                     |                       ^
-                   2 |   await new Promise((resolve) => setTimeout(resolve, 0))
-                   3 |   return <p>data slot</p>
-                   4 | }
-                 To debug the issue, start the app in development mode by running \`next dev\`, then open "/client-hook-abort-reasons/normal/use-params/[id]" in your browser to investigate the error.
-                 Error: Route "/client-hook-abort-reasons/normal/use-params/[id]": Next.js encountered URL data \`useParams()\` in a Client Component outside of \`<Suspense>\`.
+Learn more: https://nextjs.org/docs/messages/blocking-prerender-dynamic
+    at DataSlot (webpack:///app/client-hook-abort-reasons/data.tsx:1:23)
+    at Page (webpack:///app/client-hook-abort-reasons/normal/use-params/[id]/page.tsx:7:7)
+> 1 | export async function DataSlot() {
+    |                       ^
+  2 |   await new Promise((resolve) => setTimeout(resolve, 0))
+  3 |   return <p>data slot</p>
+  4 | }
+To debug the issue, start the app in development mode by running \`next dev\`, then open "/client-hook-abort-reasons/normal/use-params/[id]" in your browser to investigate the error.
+Error: Route "/client-hook-abort-reasons/normal/use-params/[id]": Next.js encountered URL data \`useParams()\` in a Client Component outside of \`<Suspense>\`.
 
-                 This blocks prerendering because the value is only available at runtime.
+This blocks prerendering because the value is only available at runtime.
 
-                 Ways to fix this:
-                   - [stream] Wrap the component in \`<Suspense fallback={...}>\` so the hook value streams in after prerendering
-                   - [block] Set \`export const instant = false\` to allow a blocking route
+Ways to fix this:
+  - [stream] Wrap the component in \`<Suspense fallback={...}>\` so the hook value streams in after prerendering
+  - [block] Set \`export const instant = false\` to allow a blocking route
 
-                 Learn more: https://nextjs.org/docs/messages/blocking-prerender-client-hook
-                     at Object.useDynamicRouteParams (webpack:///<next-src>)
-                     at useParams (webpack:///<next-src>)
-                     at UseParams (webpack:///app/client-hook-abort-reasons/client.tsx:17:12)
-                     at Page (webpack:///app/client-hook-abort-reasons/normal/use-params/[id]/page.tsx:8:7)
-                   647 |           // hang here and never resolve. This will cause the currently
-                   648 |           // rendering component to effectively be a dynamic hole.
-                 > 649 |           React.use(
-                       |                 ^
-                   650 |             makeClientHookHangingPromise(
-                   651 |               workUnitStore.renderSignal,
-                   652 |               new ClientHookDynamicError(workStore.route, expression) {
-                   digest: 'CLIENT_HOOK_DYNAMIC'
-                 }
-                 To debug the issue, start the app in development mode by running \`next dev\`, then open "/client-hook-abort-reasons/normal/use-params/[id]" in your browser to investigate the error.
-                 Error occurred prerendering page "/client-hook-abort-reasons/normal/use-params/[id]". Read more: https://nextjs.org/docs/messages/prerender-error
+Learn more: https://nextjs.org/docs/messages/blocking-prerender-client-hook
+    at useDynamicRouteParams (webpack:///<next-src>)
+    at useParams (webpack:///<next-src>)
+    at UseParams (webpack:///app/client-hook-abort-reasons/client.tsx:17:12)
+    at Page (webpack:///app/client-hook-abort-reasons/normal/use-params/[id]/page.tsx:8:7)
+  43 |   const hangingPromise = trackDynamicRouteParamsAccess?.(expression)
+  44 |   if (hangingPromise !== undefined) {
+> 45 |     use(hangingPromise)
+     |     ^
+  46 |   }
+  47 | }
+  48 | {
+  digest: 'CLIENT_HOOK_DYNAMIC'
+}
+To debug the issue, start the app in development mode by running \`next dev\`, then open "/client-hook-abort-reasons/normal/use-params/[id]" in your browser to investigate the error.
+Error occurred prerendering page "/client-hook-abort-reasons/normal/use-params/[id]". Read more: https://nextjs.org/docs/messages/prerender-error
 
-                 > Export encountered errors on 1 path:
-                 	/client-hook-abort-reasons/normal/use-params/[id]/page: /client-hook-abort-reasons/normal/use-params/[id]"
-                `)
+> Export encountered errors on 1 path:
+	/client-hook-abort-reasons/normal/use-params/[id]/page: /client-hook-abort-reasons/normal/use-params/[id]"
+`)
               } else {
                 expect(output).toMatchInlineSnapshot(`
                  "Error: Route "/client-hook-abort-reasons/normal/use-params/[id]": Next.js encountered URL data \`useParams()\` in a Client Component outside of \`<Suspense>\`.
@@ -1157,52 +1157,52 @@ describe('Cache Components Errors - Client Hook Abort Reasons', () => {
             if (!isTurbopack) {
               if (isDebugPrerender) {
                 expect(output).toMatchInlineSnapshot(`
-                 "Error: Route "/client-hook-abort-reasons/normal/use-selected-layout-segments/[id]": Next.js encountered uncached or runtime data during prerendering.
+"Error: Route "/client-hook-abort-reasons/normal/use-selected-layout-segments/[id]": Next.js encountered uncached or runtime data during prerendering.
 
-                 \`fetch(...)\`, \`cookies()\`, \`headers()\`, \`params\`, \`searchParams\`, or \`connection()\` accessed outside of \`<Suspense>\` prevents the route from being prerendered, blocking the page load and leading to a slower user experience.
+\`fetch(...)\`, \`cookies()\`, \`headers()\`, \`params\`, \`searchParams\`, or \`connection()\` accessed outside of \`<Suspense>\` prevents the route from being prerendered, blocking the page load and leading to a slower user experience.
 
-                 Ways to fix this:
-                   - [stream] Provide a placeholder with \`<Suspense fallback={...}>\` around the data access
-                   - [cache] For uncached data (\`fetch\`, database calls): cache the access with \`"use cache"\` (does not apply to \`connection()\`)
-                   - [block] Set \`export const instant = false\` to allow a blocking route
+Ways to fix this:
+  - [stream] Provide a placeholder with \`<Suspense fallback={...}>\` around the data access
+  - [cache] For uncached data (\`fetch\`, database calls): cache the access with \`"use cache"\` (does not apply to \`connection()\`)
+  - [block] Set \`export const instant = false\` to allow a blocking route
 
-                 Learn more: https://nextjs.org/docs/messages/blocking-prerender-dynamic
-                     at DataSlot (webpack:///app/client-hook-abort-reasons/data.tsx:1:23)
-                     at Page (webpack:///app/client-hook-abort-reasons/normal/use-selected-layout-segments/[id]/page.tsx:8:7)
-                 > 1 | export async function DataSlot() {
-                     |                       ^
-                   2 |   await new Promise((resolve) => setTimeout(resolve, 0))
-                   3 |   return <p>data slot</p>
-                   4 | }
-                 To debug the issue, start the app in development mode by running \`next dev\`, then open "/client-hook-abort-reasons/normal/use-selected-layout-segments/[id]" in your browser to investigate the error.
-                 Error: Route "/client-hook-abort-reasons/normal/use-selected-layout-segments/[id]": Next.js encountered URL data \`useSelectedLayoutSegments()\` in a Client Component outside of \`<Suspense>\`.
+Learn more: https://nextjs.org/docs/messages/blocking-prerender-dynamic
+    at DataSlot (webpack:///app/client-hook-abort-reasons/data.tsx:1:23)
+    at Page (webpack:///app/client-hook-abort-reasons/normal/use-selected-layout-segments/[id]/page.tsx:8:7)
+> 1 | export async function DataSlot() {
+    |                       ^
+  2 |   await new Promise((resolve) => setTimeout(resolve, 0))
+  3 |   return <p>data slot</p>
+  4 | }
+To debug the issue, start the app in development mode by running \`next dev\`, then open "/client-hook-abort-reasons/normal/use-selected-layout-segments/[id]" in your browser to investigate the error.
+Error: Route "/client-hook-abort-reasons/normal/use-selected-layout-segments/[id]": Next.js encountered URL data \`useSelectedLayoutSegments()\` in a Client Component outside of \`<Suspense>\`.
 
-                 This blocks prerendering because the value is only available at runtime.
+This blocks prerendering because the value is only available at runtime.
 
-                 Ways to fix this:
-                   - [stream] Wrap the component in \`<Suspense fallback={...}>\` so the hook value streams in after prerendering
-                   - [block] Set \`export const instant = false\` to allow a blocking route
+Ways to fix this:
+  - [stream] Wrap the component in \`<Suspense fallback={...}>\` so the hook value streams in after prerendering
+  - [block] Set \`export const instant = false\` to allow a blocking route
 
-                 Learn more: https://nextjs.org/docs/messages/blocking-prerender-client-hook
-                     at Object.useDynamicRouteParams (webpack:///<next-src>)
-                     at useSelectedLayoutSegments (webpack:///<next-src>)
-                     at UseSelectedLayoutSegments (webpack:///app/client-hook-abort-reasons/client.tsx:37:28)
-                     at Page (webpack:///app/client-hook-abort-reasons/normal/use-selected-layout-segments/[id]/page.tsx:7:7)
-                   647 |           // hang here and never resolve. This will cause the currently
-                   648 |           // rendering component to effectively be a dynamic hole.
-                 > 649 |           React.use(
-                       |                 ^
-                   650 |             makeClientHookHangingPromise(
-                   651 |               workUnitStore.renderSignal,
-                   652 |               new ClientHookDynamicError(workStore.route, expression) {
-                   digest: 'CLIENT_HOOK_DYNAMIC'
-                 }
-                 To debug the issue, start the app in development mode by running \`next dev\`, then open "/client-hook-abort-reasons/normal/use-selected-layout-segments/[id]" in your browser to investigate the error.
-                 Error occurred prerendering page "/client-hook-abort-reasons/normal/use-selected-layout-segments/[id]". Read more: https://nextjs.org/docs/messages/prerender-error
+Learn more: https://nextjs.org/docs/messages/blocking-prerender-client-hook
+    at useDynamicRouteParams (webpack:///<next-src>)
+    at useSelectedLayoutSegments (webpack:///<next-src>)
+    at UseSelectedLayoutSegments (webpack:///app/client-hook-abort-reasons/client.tsx:37:28)
+    at Page (webpack:///app/client-hook-abort-reasons/normal/use-selected-layout-segments/[id]/page.tsx:7:7)
+  43 |   const hangingPromise = trackDynamicRouteParamsAccess?.(expression)
+  44 |   if (hangingPromise !== undefined) {
+> 45 |     use(hangingPromise)
+     |     ^
+  46 |   }
+  47 | }
+  48 | {
+  digest: 'CLIENT_HOOK_DYNAMIC'
+}
+To debug the issue, start the app in development mode by running \`next dev\`, then open "/client-hook-abort-reasons/normal/use-selected-layout-segments/[id]" in your browser to investigate the error.
+Error occurred prerendering page "/client-hook-abort-reasons/normal/use-selected-layout-segments/[id]". Read more: https://nextjs.org/docs/messages/prerender-error
 
-                 > Export encountered errors on 1 path:
-                 	/client-hook-abort-reasons/normal/use-selected-layout-segments/[id]/page: /client-hook-abort-reasons/normal/use-selected-layout-segments/[id]"
-                `)
+> Export encountered errors on 1 path:
+	/client-hook-abort-reasons/normal/use-selected-layout-segments/[id]/page: /client-hook-abort-reasons/normal/use-selected-layout-segments/[id]"
+`)
               } else {
                 expect(output).toMatchInlineSnapshot(`
                  "Error: Route "/client-hook-abort-reasons/normal/use-selected-layout-segments/[id]": Next.js encountered URL data \`useSelectedLayoutSegments()\` in a Client Component outside of \`<Suspense>\`.
@@ -1447,52 +1447,52 @@ describe('Cache Components Errors - Client Hook Abort Reasons', () => {
             if (!isTurbopack) {
               if (isDebugPrerender) {
                 expect(output).toMatchInlineSnapshot(`
-                 "Error: Route "/client-hook-abort-reasons/normal/use-selected-layout-segment/[id]": Next.js encountered uncached or runtime data during prerendering.
+"Error: Route "/client-hook-abort-reasons/normal/use-selected-layout-segment/[id]": Next.js encountered uncached or runtime data during prerendering.
 
-                 \`fetch(...)\`, \`cookies()\`, \`headers()\`, \`params\`, \`searchParams\`, or \`connection()\` accessed outside of \`<Suspense>\` prevents the route from being prerendered, blocking the page load and leading to a slower user experience.
+\`fetch(...)\`, \`cookies()\`, \`headers()\`, \`params\`, \`searchParams\`, or \`connection()\` accessed outside of \`<Suspense>\` prevents the route from being prerendered, blocking the page load and leading to a slower user experience.
 
-                 Ways to fix this:
-                   - [stream] Provide a placeholder with \`<Suspense fallback={...}>\` around the data access
-                   - [cache] For uncached data (\`fetch\`, database calls): cache the access with \`"use cache"\` (does not apply to \`connection()\`)
-                   - [block] Set \`export const instant = false\` to allow a blocking route
+Ways to fix this:
+  - [stream] Provide a placeholder with \`<Suspense fallback={...}>\` around the data access
+  - [cache] For uncached data (\`fetch\`, database calls): cache the access with \`"use cache"\` (does not apply to \`connection()\`)
+  - [block] Set \`export const instant = false\` to allow a blocking route
 
-                 Learn more: https://nextjs.org/docs/messages/blocking-prerender-dynamic
-                     at DataSlot (webpack:///app/client-hook-abort-reasons/data.tsx:1:23)
-                     at Page (webpack:///app/client-hook-abort-reasons/normal/use-selected-layout-segment/[id]/page.tsx:7:7)
-                 > 1 | export async function DataSlot() {
-                     |                       ^
-                   2 |   await new Promise((resolve) => setTimeout(resolve, 0))
-                   3 |   return <p>data slot</p>
-                   4 | }
-                 To debug the issue, start the app in development mode by running \`next dev\`, then open "/client-hook-abort-reasons/normal/use-selected-layout-segment/[id]" in your browser to investigate the error.
-                 Error: Route "/client-hook-abort-reasons/normal/use-selected-layout-segment/[id]": Next.js encountered URL data \`useSelectedLayoutSegment()\` in a Client Component outside of \`<Suspense>\`.
+Learn more: https://nextjs.org/docs/messages/blocking-prerender-dynamic
+    at DataSlot (webpack:///app/client-hook-abort-reasons/data.tsx:1:23)
+    at Page (webpack:///app/client-hook-abort-reasons/normal/use-selected-layout-segment/[id]/page.tsx:7:7)
+> 1 | export async function DataSlot() {
+    |                       ^
+  2 |   await new Promise((resolve) => setTimeout(resolve, 0))
+  3 |   return <p>data slot</p>
+  4 | }
+To debug the issue, start the app in development mode by running \`next dev\`, then open "/client-hook-abort-reasons/normal/use-selected-layout-segment/[id]" in your browser to investigate the error.
+Error: Route "/client-hook-abort-reasons/normal/use-selected-layout-segment/[id]": Next.js encountered URL data \`useSelectedLayoutSegment()\` in a Client Component outside of \`<Suspense>\`.
 
-                 This blocks prerendering because the value is only available at runtime.
+This blocks prerendering because the value is only available at runtime.
 
-                 Ways to fix this:
-                   - [stream] Wrap the component in \`<Suspense fallback={...}>\` so the hook value streams in after prerendering
-                   - [block] Set \`export const instant = false\` to allow a blocking route
+Ways to fix this:
+  - [stream] Wrap the component in \`<Suspense fallback={...}>\` so the hook value streams in after prerendering
+  - [block] Set \`export const instant = false\` to allow a blocking route
 
-                 Learn more: https://nextjs.org/docs/messages/blocking-prerender-client-hook
-                     at Object.useDynamicRouteParams (webpack:///<next-src>)
-                     at useSelectedLayoutSegment (webpack:///<next-src>)
-                     at UseSelectedLayoutSegment (webpack:///app/client-hook-abort-reasons/client.tsx:32:27)
-                     at Page (webpack:///app/client-hook-abort-reasons/normal/use-selected-layout-segment/[id]/page.tsx:8:7)
-                   647 |           // hang here and never resolve. This will cause the currently
-                   648 |           // rendering component to effectively be a dynamic hole.
-                 > 649 |           React.use(
-                       |                 ^
-                   650 |             makeClientHookHangingPromise(
-                   651 |               workUnitStore.renderSignal,
-                   652 |               new ClientHookDynamicError(workStore.route, expression) {
-                   digest: 'CLIENT_HOOK_DYNAMIC'
-                 }
-                 To debug the issue, start the app in development mode by running \`next dev\`, then open "/client-hook-abort-reasons/normal/use-selected-layout-segment/[id]" in your browser to investigate the error.
-                 Error occurred prerendering page "/client-hook-abort-reasons/normal/use-selected-layout-segment/[id]". Read more: https://nextjs.org/docs/messages/prerender-error
+Learn more: https://nextjs.org/docs/messages/blocking-prerender-client-hook
+    at useDynamicRouteParams (webpack:///<next-src>)
+    at useSelectedLayoutSegment (webpack:///<next-src>)
+    at UseSelectedLayoutSegment (webpack:///app/client-hook-abort-reasons/client.tsx:32:27)
+    at Page (webpack:///app/client-hook-abort-reasons/normal/use-selected-layout-segment/[id]/page.tsx:8:7)
+  43 |   const hangingPromise = trackDynamicRouteParamsAccess?.(expression)
+  44 |   if (hangingPromise !== undefined) {
+> 45 |     use(hangingPromise)
+     |     ^
+  46 |   }
+  47 | }
+  48 | {
+  digest: 'CLIENT_HOOK_DYNAMIC'
+}
+To debug the issue, start the app in development mode by running \`next dev\`, then open "/client-hook-abort-reasons/normal/use-selected-layout-segment/[id]" in your browser to investigate the error.
+Error occurred prerendering page "/client-hook-abort-reasons/normal/use-selected-layout-segment/[id]". Read more: https://nextjs.org/docs/messages/prerender-error
 
-                 > Export encountered errors on 1 path:
-                 	/client-hook-abort-reasons/normal/use-selected-layout-segment/[id]/page: /client-hook-abort-reasons/normal/use-selected-layout-segment/[id]"
-                `)
+> Export encountered errors on 1 path:
+	/client-hook-abort-reasons/normal/use-selected-layout-segment/[id]/page: /client-hook-abort-reasons/normal/use-selected-layout-segment/[id]"
+`)
               } else {
                 expect(output).toMatchInlineSnapshot(`
                  "Error: Route "/client-hook-abort-reasons/normal/use-selected-layout-segment/[id]": Next.js encountered URL data \`useSelectedLayoutSegment()\` in a Client Component outside of \`<Suspense>\`.
@@ -2165,54 +2165,54 @@ describe('Cache Components Errors - Client Hook Abort Reasons', () => {
             if (!isTurbopack) {
               if (isDebugPrerender) {
                 expect(output).toMatchInlineSnapshot(`
-                 "Error: Route "/client-hook-abort-reasons/sync-io/use-params/[id]": Next.js encountered the unstable value \`Date.now()\` in a Client Component.
+"Error: Route "/client-hook-abort-reasons/sync-io/use-params/[id]": Next.js encountered the unstable value \`Date.now()\` in a Client Component.
 
-                 This value would be evaluated during the prerender, instead of recomputed on each visit.
+This value would be evaluated during the prerender, instead of recomputed on each visit.
 
-                 Ways to fix this:
-                   - [stream] Wrap the Client Component in \`<Suspense fallback={...}>\`
-                   - [defer] Move the read into a \`useEffect\` or event handler
-                   - [measure] If the value is for telemetry, use a timing API such as \`performance.now()\`
+Ways to fix this:
+  - [stream] Wrap the Client Component in \`<Suspense fallback={...}>\`
+  - [defer] Move the read into a \`useEffect\` or event handler
+  - [measure] If the value is for telemetry, use a timing API such as \`performance.now()\`
 
-                 Learn more: https://nextjs.org/docs/messages/blocking-prerender-current-time-client
-                     at SyncIO (webpack:///app/client-hook-abort-reasons/client.tsx:12:8)
-                     at Page (webpack:///app/client-hook-abort-reasons/sync-io/use-params/[id]/page.tsx:8:7)
-                   10 |
-                   11 | export function SyncIO() {
-                 > 12 |   Date.now()
-                      |        ^
-                   13 |   return <p>sync IO slot</p>
-                   14 | }
-                   15 |
-                 To debug the issue, start the app in development mode by running \`next dev\`, then open "/client-hook-abort-reasons/sync-io/use-params/[id]" in your browser to investigate the error.
-                 Error: Route "/client-hook-abort-reasons/sync-io/use-params/[id]": Next.js encountered URL data \`useParams()\` in a Client Component outside of \`<Suspense>\`.
+Learn more: https://nextjs.org/docs/messages/blocking-prerender-current-time-client
+    at SyncIO (webpack:///app/client-hook-abort-reasons/client.tsx:12:8)
+    at Page (webpack:///app/client-hook-abort-reasons/sync-io/use-params/[id]/page.tsx:8:7)
+  10 |
+  11 | export function SyncIO() {
+> 12 |   Date.now()
+     |        ^
+  13 |   return <p>sync IO slot</p>
+  14 | }
+  15 |
+To debug the issue, start the app in development mode by running \`next dev\`, then open "/client-hook-abort-reasons/sync-io/use-params/[id]" in your browser to investigate the error.
+Error: Route "/client-hook-abort-reasons/sync-io/use-params/[id]": Next.js encountered URL data \`useParams()\` in a Client Component outside of \`<Suspense>\`.
 
-                 This blocks prerendering because the value is only available at runtime.
+This blocks prerendering because the value is only available at runtime.
 
-                 Ways to fix this:
-                   - [stream] Wrap the component in \`<Suspense fallback={...}>\` so the hook value streams in after prerendering
-                   - [block] Set \`export const instant = false\` to allow a blocking route
+Ways to fix this:
+  - [stream] Wrap the component in \`<Suspense fallback={...}>\` so the hook value streams in after prerendering
+  - [block] Set \`export const instant = false\` to allow a blocking route
 
-                 Learn more: https://nextjs.org/docs/messages/blocking-prerender-client-hook
-                     at Object.useDynamicRouteParams (webpack:///<next-src>)
-                     at useParams (webpack:///<next-src>)
-                     at UseParams (webpack:///app/client-hook-abort-reasons/client.tsx:17:12)
-                     at Page (webpack:///app/client-hook-abort-reasons/sync-io/use-params/[id]/page.tsx:7:7)
-                   647 |           // hang here and never resolve. This will cause the currently
-                   648 |           // rendering component to effectively be a dynamic hole.
-                 > 649 |           React.use(
-                       |                 ^
-                   650 |             makeClientHookHangingPromise(
-                   651 |               workUnitStore.renderSignal,
-                   652 |               new ClientHookDynamicError(workStore.route, expression) {
-                   digest: 'CLIENT_HOOK_DYNAMIC'
-                 }
-                 To debug the issue, start the app in development mode by running \`next dev\`, then open "/client-hook-abort-reasons/sync-io/use-params/[id]" in your browser to investigate the error.
-                 Error occurred prerendering page "/client-hook-abort-reasons/sync-io/use-params/[id]". Read more: https://nextjs.org/docs/messages/prerender-error
+Learn more: https://nextjs.org/docs/messages/blocking-prerender-client-hook
+    at useDynamicRouteParams (webpack:///<next-src>)
+    at useParams (webpack:///<next-src>)
+    at UseParams (webpack:///app/client-hook-abort-reasons/client.tsx:17:12)
+    at Page (webpack:///app/client-hook-abort-reasons/sync-io/use-params/[id]/page.tsx:7:7)
+  43 |   const hangingPromise = trackDynamicRouteParamsAccess?.(expression)
+  44 |   if (hangingPromise !== undefined) {
+> 45 |     use(hangingPromise)
+     |     ^
+  46 |   }
+  47 | }
+  48 | {
+  digest: 'CLIENT_HOOK_DYNAMIC'
+}
+To debug the issue, start the app in development mode by running \`next dev\`, then open "/client-hook-abort-reasons/sync-io/use-params/[id]" in your browser to investigate the error.
+Error occurred prerendering page "/client-hook-abort-reasons/sync-io/use-params/[id]". Read more: https://nextjs.org/docs/messages/prerender-error
 
-                 > Export encountered errors on 1 path:
-                 	/client-hook-abort-reasons/sync-io/use-params/[id]/page: /client-hook-abort-reasons/sync-io/use-params/[id]"
-                `)
+> Export encountered errors on 1 path:
+	/client-hook-abort-reasons/sync-io/use-params/[id]/page: /client-hook-abort-reasons/sync-io/use-params/[id]"
+`)
               } else {
                 expect(output).toMatchInlineSnapshot(`
                  "Error: Route "/client-hook-abort-reasons/sync-io/use-params/[id]": Next.js encountered the unstable value \`Date.now()\` in a Client Component.
@@ -2646,72 +2646,72 @@ describe('Cache Components Errors - Client Hook Abort Reasons', () => {
             if (!isTurbopack) {
               if (isDebugPrerender) {
                 expect(output).toMatchInlineSnapshot(`
-                 "Error: Route "/client-hook-abort-reasons/sync-io/use-selected-layout-segment/[id]": Next.js encountered the unstable value \`Date.now()\` in a Client Component.
+"Error: Route "/client-hook-abort-reasons/sync-io/use-selected-layout-segment/[id]": Next.js encountered the unstable value \`Date.now()\` in a Client Component.
 
-                 This value would be evaluated during the prerender, instead of recomputed on each visit.
+This value would be evaluated during the prerender, instead of recomputed on each visit.
 
-                 Ways to fix this:
-                   - [stream] Wrap the Client Component in \`<Suspense fallback={...}>\`
-                   - [defer] Move the read into a \`useEffect\` or event handler
-                   - [measure] If the value is for telemetry, use a timing API such as \`performance.now()\`
+Ways to fix this:
+  - [stream] Wrap the Client Component in \`<Suspense fallback={...}>\`
+  - [defer] Move the read into a \`useEffect\` or event handler
+  - [measure] If the value is for telemetry, use a timing API such as \`performance.now()\`
 
-                 Learn more: https://nextjs.org/docs/messages/blocking-prerender-current-time-client
-                     at SyncIO (webpack:///app/client-hook-abort-reasons/client.tsx:12:8)
-                     at Page (webpack:///app/client-hook-abort-reasons/sync-io/use-selected-layout-segment/[id]/page.tsx:9:7)
-                   10 |
-                   11 | export function SyncIO() {
-                 > 12 |   Date.now()
-                      |        ^
-                   13 |   return <p>sync IO slot</p>
-                   14 | }
-                   15 |
-                 To debug the issue, start the app in development mode by running \`next dev\`, then open "/client-hook-abort-reasons/sync-io/use-selected-layout-segment/[id]" in your browser to investigate the error.
-                 Error: Route "/client-hook-abort-reasons/sync-io/use-selected-layout-segment/[id]": Next.js encountered uncached or runtime data during prerendering.
+Learn more: https://nextjs.org/docs/messages/blocking-prerender-current-time-client
+    at SyncIO (webpack:///app/client-hook-abort-reasons/client.tsx:12:8)
+    at Page (webpack:///app/client-hook-abort-reasons/sync-io/use-selected-layout-segment/[id]/page.tsx:9:7)
+  10 |
+  11 | export function SyncIO() {
+> 12 |   Date.now()
+     |        ^
+  13 |   return <p>sync IO slot</p>
+  14 | }
+  15 |
+To debug the issue, start the app in development mode by running \`next dev\`, then open "/client-hook-abort-reasons/sync-io/use-selected-layout-segment/[id]" in your browser to investigate the error.
+Error: Route "/client-hook-abort-reasons/sync-io/use-selected-layout-segment/[id]": Next.js encountered uncached or runtime data during prerendering.
 
-                 \`fetch(...)\`, \`cookies()\`, \`headers()\`, \`params\`, \`searchParams\`, or \`connection()\` accessed outside of \`<Suspense>\` prevents the route from being prerendered, blocking the page load and leading to a slower user experience.
+\`fetch(...)\`, \`cookies()\`, \`headers()\`, \`params\`, \`searchParams\`, or \`connection()\` accessed outside of \`<Suspense>\` prevents the route from being prerendered, blocking the page load and leading to a slower user experience.
 
-                 Ways to fix this:
-                   - [stream] Provide a placeholder with \`<Suspense fallback={...}>\` around the data access
-                   - [cache] For uncached data (\`fetch\`, database calls): cache the access with \`"use cache"\` (does not apply to \`connection()\`)
-                   - [block] Set \`export const instant = false\` to allow a blocking route
+Ways to fix this:
+  - [stream] Provide a placeholder with \`<Suspense fallback={...}>\` around the data access
+  - [cache] For uncached data (\`fetch\`, database calls): cache the access with \`"use cache"\` (does not apply to \`connection()\`)
+  - [block] Set \`export const instant = false\` to allow a blocking route
 
-                 Learn more: https://nextjs.org/docs/messages/blocking-prerender-dynamic
-                     at DataSlot (webpack:///app/client-hook-abort-reasons/data.tsx:1:23)
-                     at Page (webpack:///app/client-hook-abort-reasons/sync-io/use-selected-layout-segment/[id]/page.tsx:7:7)
-                 > 1 | export async function DataSlot() {
-                     |                       ^
-                   2 |   await new Promise((resolve) => setTimeout(resolve, 0))
-                   3 |   return <p>data slot</p>
-                   4 | }
-                 To debug the issue, start the app in development mode by running \`next dev\`, then open "/client-hook-abort-reasons/sync-io/use-selected-layout-segment/[id]" in your browser to investigate the error.
-                 Error: Route "/client-hook-abort-reasons/sync-io/use-selected-layout-segment/[id]": Next.js encountered URL data \`useSelectedLayoutSegment()\` in a Client Component outside of \`<Suspense>\`.
+Learn more: https://nextjs.org/docs/messages/blocking-prerender-dynamic
+    at DataSlot (webpack:///app/client-hook-abort-reasons/data.tsx:1:23)
+    at Page (webpack:///app/client-hook-abort-reasons/sync-io/use-selected-layout-segment/[id]/page.tsx:7:7)
+> 1 | export async function DataSlot() {
+    |                       ^
+  2 |   await new Promise((resolve) => setTimeout(resolve, 0))
+  3 |   return <p>data slot</p>
+  4 | }
+To debug the issue, start the app in development mode by running \`next dev\`, then open "/client-hook-abort-reasons/sync-io/use-selected-layout-segment/[id]" in your browser to investigate the error.
+Error: Route "/client-hook-abort-reasons/sync-io/use-selected-layout-segment/[id]": Next.js encountered URL data \`useSelectedLayoutSegment()\` in a Client Component outside of \`<Suspense>\`.
 
-                 This blocks prerendering because the value is only available at runtime.
+This blocks prerendering because the value is only available at runtime.
 
-                 Ways to fix this:
-                   - [stream] Wrap the component in \`<Suspense fallback={...}>\` so the hook value streams in after prerendering
-                   - [block] Set \`export const instant = false\` to allow a blocking route
+Ways to fix this:
+  - [stream] Wrap the component in \`<Suspense fallback={...}>\` so the hook value streams in after prerendering
+  - [block] Set \`export const instant = false\` to allow a blocking route
 
-                 Learn more: https://nextjs.org/docs/messages/blocking-prerender-client-hook
-                     at Object.useDynamicRouteParams (webpack:///<next-src>)
-                     at useSelectedLayoutSegment (webpack:///<next-src>)
-                     at UseSelectedLayoutSegment (webpack:///app/client-hook-abort-reasons/client.tsx:32:27)
-                     at Page (webpack:///app/client-hook-abort-reasons/sync-io/use-selected-layout-segment/[id]/page.tsx:8:7)
-                   647 |           // hang here and never resolve. This will cause the currently
-                   648 |           // rendering component to effectively be a dynamic hole.
-                 > 649 |           React.use(
-                       |                 ^
-                   650 |             makeClientHookHangingPromise(
-                   651 |               workUnitStore.renderSignal,
-                   652 |               new ClientHookDynamicError(workStore.route, expression) {
-                   digest: 'CLIENT_HOOK_DYNAMIC'
-                 }
-                 To debug the issue, start the app in development mode by running \`next dev\`, then open "/client-hook-abort-reasons/sync-io/use-selected-layout-segment/[id]" in your browser to investigate the error.
-                 Error occurred prerendering page "/client-hook-abort-reasons/sync-io/use-selected-layout-segment/[id]". Read more: https://nextjs.org/docs/messages/prerender-error
+Learn more: https://nextjs.org/docs/messages/blocking-prerender-client-hook
+    at useDynamicRouteParams (webpack:///<next-src>)
+    at useSelectedLayoutSegment (webpack:///<next-src>)
+    at UseSelectedLayoutSegment (webpack:///app/client-hook-abort-reasons/client.tsx:32:27)
+    at Page (webpack:///app/client-hook-abort-reasons/sync-io/use-selected-layout-segment/[id]/page.tsx:8:7)
+  43 |   const hangingPromise = trackDynamicRouteParamsAccess?.(expression)
+  44 |   if (hangingPromise !== undefined) {
+> 45 |     use(hangingPromise)
+     |     ^
+  46 |   }
+  47 | }
+  48 | {
+  digest: 'CLIENT_HOOK_DYNAMIC'
+}
+To debug the issue, start the app in development mode by running \`next dev\`, then open "/client-hook-abort-reasons/sync-io/use-selected-layout-segment/[id]" in your browser to investigate the error.
+Error occurred prerendering page "/client-hook-abort-reasons/sync-io/use-selected-layout-segment/[id]". Read more: https://nextjs.org/docs/messages/prerender-error
 
-                 > Export encountered errors on 1 path:
-                 	/client-hook-abort-reasons/sync-io/use-selected-layout-segment/[id]/page: /client-hook-abort-reasons/sync-io/use-selected-layout-segment/[id]"
-                `)
+> Export encountered errors on 1 path:
+	/client-hook-abort-reasons/sync-io/use-selected-layout-segment/[id]/page: /client-hook-abort-reasons/sync-io/use-selected-layout-segment/[id]"
+`)
               } else {
                 expect(output).toMatchInlineSnapshot(`
                  "Error: Route "/client-hook-abort-reasons/sync-io/use-selected-layout-segment/[id]": Next.js encountered the unstable value \`Date.now()\` in a Client Component.
