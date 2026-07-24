@@ -479,6 +479,60 @@ export function Accordion() {
 
 The inline script and the lazy `useState` initializer both read from `localStorage`. They always agree, so React's initial state matches the DOM.
 
+### Reconciling state the script doesn't render
+
+The lazy initializer works because the inline script rewrites the same DOM the component renders: the accordion's `open` attribute. When the state also drives output the script doesn't touch, like a button that shows the current [theme](#themes), a lazy initializer disagrees with the server HTML and reintroduces a hydration mismatch.
+
+Keep the server default as the initial state so hydration matches, then reconcile after hydration with a [`useLayoutEffect`](https://react.dev/reference/react/useLayoutEffect), which runs [before paint](#why-not-useeffect):
+
+```tsx filename="app/components/theme-toggle.tsx" switcher
+'use client'
+
+import { useLayoutEffect, useState } from 'react'
+
+export function ThemeToggle() {
+  const [theme, setTheme] = useState('light')
+
+  useLayoutEffect(() => {
+    setTheme(localStorage.getItem('theme') ?? 'light')
+  }, [])
+
+  function toggle() {
+    const next = theme === 'light' ? 'dark' : 'light'
+    setTheme(next)
+    localStorage.setItem('theme', next)
+    document.documentElement.setAttribute('data-theme', next)
+  }
+
+  return <button onClick={toggle}>Theme: {theme}</button>
+}
+```
+
+```jsx filename="app/components/theme-toggle.js" switcher
+'use client'
+
+import { useLayoutEffect, useState } from 'react'
+
+export function ThemeToggle() {
+  const [theme, setTheme] = useState('light')
+
+  useLayoutEffect(() => {
+    setTheme(localStorage.getItem('theme') ?? 'light')
+  }, [])
+
+  function toggle() {
+    const next = theme === 'light' ? 'dark' : 'light'
+    setTheme(next)
+    localStorage.setItem('theme', next)
+    document.documentElement.setAttribute('data-theme', next)
+  }
+
+  return <button onClick={toggle}>Theme: {theme}</button>
+}
+```
+
+The colors come from CSS keyed off `data-theme`, which the inline script already applied, so they never flash. The effect reads `theme` from `localStorage`, the same source the script reads, so the two always agree; it only reconciles the button label, which isn't paint-critical.
+
 ## When to use other approaches
 
 | Situation                                       | Approach                                                                                                                                                             |
