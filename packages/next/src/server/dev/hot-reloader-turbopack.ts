@@ -2028,7 +2028,13 @@ export async function createHotReloaderTurbopack(
         const chunkPaths = [...(serverHmrSubscriptions?.keys() ?? [])].map(
           (chunkPath) => join(distDir, chunkPath)
         )
-        deleteCache(chunkPaths)
+        // One rebuild restarts every server chunk it affects, and each of them
+        // asks to clear. Clearing is global, so once the first one has emptied
+        // the module cache the rest have nothing to clear and nothing new to
+        // tell browsers about.
+        if (!deleteCache(chunkPaths)) {
+          return
+        }
 
         // Clear Turbopack's runtime caches
         if (typeof __next__clear_chunk_cache__ === 'function') {

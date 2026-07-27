@@ -9,7 +9,7 @@ import { clearManifestCache } from '../load-manifest.external'
  * instead of N scans, reducing complexity from O(N * C) to O(C + N)
  * where C = size of require.cache.
  */
-function deleteFromRequireCache(filePaths: string[]): void {
+function deleteFromRequireCache(filePaths: string[]): boolean {
   // Phase 1: Resolve all paths and collect modules to delete
   const resolvedPaths: string[] = []
   const modsToDelete = new Set<NodeModule>()
@@ -27,7 +27,7 @@ function deleteFromRequireCache(filePaths: string[]): void {
     }
   }
 
-  if (modsToDelete.size === 0) return
+  if (modsToDelete.size === 0) return false
 
   // Phase 2: Single scan of require.cache to remove child references
   const modules = Object.values(require.cache)
@@ -58,6 +58,8 @@ function deleteFromRequireCache(filePaths: string[]): void {
   for (const filePath of resolvedPaths) {
     delete require.cache[filePath]
   }
+
+  return true
 }
 
 // Listeners notified after the dev server's main-process require/manifest
@@ -75,11 +77,14 @@ export function onCacheInvalidation(
   }
 }
 
-export function deleteCache(filePaths: string[]) {
+/**
+ * Returns whether any of the modules was still in the require cache.
+ */
+export function deleteCache(filePaths: string[]): boolean {
   for (const filePath of filePaths) {
     clearManifestCache(filePath)
   }
-  deleteFromRequireCache(filePaths)
+  const deleted = deleteFromRequireCache(filePaths)
   for (const listener of cacheInvalidationListeners) {
     try {
       listener(filePaths)
@@ -87,4 +92,5 @@ export function deleteCache(filePaths: string[]) {
       // Listener errors must not interfere with cache cleanup.
     }
   }
+  return deleted
 }
