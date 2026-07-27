@@ -176,6 +176,8 @@ pub enum ExportUsage {
     All,
     /// Only side effects are used.
     Evaluation,
+    /// The whole namespace is re-exported; used exports follow the referencing module's own.
+    ReExport,
 }
 
 impl Display for ExportUsage {
@@ -194,6 +196,7 @@ impl Display for ExportUsage {
             }
             ExportUsage::All => write!(f, "all"),
             ExportUsage::Evaluation => write!(f, "evaluation"),
+            ExportUsage::ReExport => write!(f, "reexport all"),
         }
     }
 }

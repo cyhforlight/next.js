@@ -223,9 +223,22 @@ pub async fn compute_binding_usage_info(
                     }
                 }
 
+                // A namespace re-export (`module.exports = require(x)`, `export * from x`) forwards
+                // the parent's own used exports to the target.
+                let forwarded = match &ref_data.binding_usage.export {
+                    ExportUsage::ReExport => Some(
+                        used_exports
+                            .get(&parent)
+                            .context("parent module must have usage info")?
+                            .to_export_usage(),
+                    ),
+                    _ => None,
+                };
+                let export = forwarded.as_ref().unwrap_or(&ref_data.binding_usage.export);
+
                 let entry = used_exports.entry(target);
                 let is_first_visit = matches!(entry, Entry::Vacant(_));
-                if entry.or_default().add(&ref_data.binding_usage.export) || is_first_visit {
+                if entry.or_default().add(export) || is_first_visit {
                     // First visit, or the used exports changed. This can cause more imports to get
                     // used downstream.
                     Ok(GraphTraversalAction::Continue)
@@ -370,6 +383,21 @@ impl ModuleExportUsageInfo {
                 changed
             }
             (_, ExportUsage::Evaluation) => false,
+            (_, ExportUsage::ReExport) => {
+                *self = Self::All;
+                true
+            }
+        }
+    }
+
+    /// The equivalent reference-level usage, for forwarding this module's usage onward.
+    fn to_export_usage(&self) -> ExportUsage {
+        match self {
+            Self::All => ExportUsage::All,
+            Self::Evaluation => ExportUsage::Evaluation,
+            Self::Exports(names) => {
+                ExportUsage::PartialNamespaceObject(names.iter().cloned().collect())
+            }
         }
     }
 
