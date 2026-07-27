@@ -142,7 +142,7 @@ describe('route-change-refetch - App Router', () => {
     }
   })
 
-  it('refetches an open tab exactly twice when a page is added', async () => {
+  it('refetches an open tab exactly once when a page is added or removed', async () => {
     // Use a page no other test visits: tabs opened by earlier tests stay
     // open and re-fetch their own routes too, which would pollute the count.
     const browser = await next.browser('/counted')
@@ -159,7 +159,14 @@ describe('route-change-refetch - App Router', () => {
     try {
       await addPageAndWaitUntilServable('/zz-added')
       await retry(async () => {
-        // TODO: Stop counting a page add as an env change, then it'll be + 1.
+        expect(countServerHits()).toBe(baseline + 1)
+      }, 15_000)
+
+      await next.deleteFile('app/zz-added/page.tsx')
+      await retry(async () => {
+        expect((await next.fetch('/zz-added')).status).toBe(404)
+      }, 15_000)
+      await retry(async () => {
         expect(countServerHits()).toBe(baseline + 2)
       }, 15_000)
     } finally {
