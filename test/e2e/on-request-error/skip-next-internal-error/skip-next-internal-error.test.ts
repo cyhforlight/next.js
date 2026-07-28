@@ -63,6 +63,11 @@ describe('on-request-error - skip-next-internal-error', () => {
       await assertNoNextjsInternalErrors()
     })
 
+    it('should not catch browserOnly CSR bailout errors', async () => {
+      await next.fetch('/client/browser-only')
+      await assertNoNextjsInternalErrors()
+    })
+
     // Server Actions navigation
     it('should not catch server action not-found errors', async () => {
       await next.fetch('/form/not-found')
