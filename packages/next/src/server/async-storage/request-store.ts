@@ -55,6 +55,21 @@ function getHeaders(headers: Headers | IncomingHttpHeaders): ReadonlyHeaders {
   return HeadersAdapter.seal(cleaned)
 }
 
+/**
+ * Creates a ReadonlyHeaders view with a distinct object identity over the same
+ * (already sealed and stripped) underlying headers. Each render pass must
+ * expose its own headers object, so that userland caches keyed on the identity
+ * of `await headers()` cannot leak promises across render passes with
+ * different dynamic semantics, e.g. from an aborted runtime prefetch prerender
+ * into the navigation render it was spawned from. Re-sealing only allocates a
+ * proxy; the underlying headers are not copied.
+ */
+export function createRenderPassReadonlyHeaders(
+  headers: ReadonlyHeaders
+): ReadonlyHeaders {
+  return HeadersAdapter.seal(headers)
+}
+
 function getMutableCookies(
   headers: Headers | IncomingHttpHeaders,
   onUpdateCookies?: (cookies: string[]) => void

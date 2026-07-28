@@ -84,6 +84,7 @@ import {
 import { createMetadataContext } from '../../lib/metadata/metadata-context'
 import {
   createRequestStore as createRequestStoreFromInputs,
+  createRenderPassReadonlyHeaders,
   createRequestStoreForRender,
 } from '../async-storage/request-store'
 import { isRSCRequestHeader } from '../lib/is-rsc-request'
@@ -1653,8 +1654,10 @@ async function prospectiveRuntimeServerPrerender(
     // No stage sequencing needed for prospective renders.
     stagedRendering: null,
     isSessionShell: isShellPrefetch,
-    // These are not present in regular prerenders, but allowed in a runtime prerender.
-    headers,
+    // These are not present in regular prerenders, but allowed in a runtime
+    // prerender. Each render pass exposes its own headers object identity so
+    // userland caches keyed on `await headers()` are scoped to this pass.
+    headers: createRenderPassReadonlyHeaders(headers),
     cookies,
     draftMode,
   }
@@ -1829,8 +1832,10 @@ async function finalRuntimeServerPrerender(
     varyParamsAccumulator,
     stagedRendering: finalStageController,
     isSessionShell: mode.type === 'session-shell-only',
-    // These are not present in regular prerenders, but allowed in a runtime prerender.
-    headers,
+    // These are not present in regular prerenders, but allowed in a runtime
+    // prerender. Each render pass exposes its own headers object identity so
+    // userland caches keyed on `await headers()` are scoped to this pass.
+    headers: createRenderPassReadonlyHeaders(headers),
     cookies,
     draftMode,
   }

@@ -1,5 +1,5 @@
 import { nextTestSetup } from 'e2e-utils'
-import { retry } from 'next-test-utils'
+import { retry, waitFor } from 'next-test-utils'
 import type * as Playwright from 'playwright'
 import { createRouterAct } from 'router-act'
 
@@ -17,7 +17,7 @@ describe('module-level caches keyed on the headers object', () => {
     return
   }
 
-  it('breaks the dynamic content of a navigation when the spawned runtime prerender populated the cache first', async () => {
+  it('renders dynamic content on navigation even when the spawned runtime prerender populated the cache first', async () => {
     const cliOutputStart = next.cliOutput.length
 
     let page: Playwright.Page
@@ -39,36 +39,29 @@ describe('module-level caches keyed on the headers object', () => {
       { includes: 'Header:' }
     )
 
-    // Navigate. connection() resolves during navigations, so the page should
-    // render its dynamic content. But the navigation request also spawns a
-    // runtime prerender to refresh the client's prefetch cache, which shares
-    // the request's headers object and reaches the module-level cache before
-    // the stage-gated dynamic render of the navigation does. The prerender
-    // memoizes a hanging connection() promise, which rejects when the
-    // prerender is aborted. The navigation's dynamic render awaits the same
-    // promise and fails: the user gets the error boundary instead of the
-    // dynamic content.
+    // Navigate. The navigation request also spawns a runtime prerender to
+    // refresh the client's prefetch cache, which reaches the module-level
+    // cache before the stage-gated dynamic render of the navigation does.
+    // Because each render pass resolves `headers()` to a distinct object, the
+    // hanging connection() promise it memoizes is keyed to the prerender pass
+    // only: the navigation's dynamic render misses the cache, creates its own
+    // promise, and connection() resolves, so the dynamic content renders.
     await browser.elementByCss('a[href="/dynamic"]').click()
 
     await retry(async () => {
-      expect(await browser.elementById('dynamic-error').text()).toBe(
-        'Failed to render dynamic content'
+      expect(await browser.elementById('dynamic-content').text()).toBe(
+        'Dynamic content: request data'
       )
     })
-    expect(await browser.hasElementByCssSelector('#dynamic-content')).toBe(
-      false
-    )
+    expect(await browser.hasElementByCssSelector('#dynamic-error')).toBe(false)
 
-    // The navigation request reports the render error as well.
-    await retry(async () => {
-      const cliOutput = next.cliOutput.slice(cliOutputStart)
-      expect(cliOutput).toContain(
-        `[instrumentation] onRequestError:${HANGING_PROMISE_MESSAGE}`
-      )
-    }, 5000)
+    // The rejection of the prerender pass's hanging promise stays within the
+    // pass that created it, so nothing is reported to onRequestError either.
+    const cliOutput = next.cliOutput.slice(cliOutputStart)
+    expect(cliOutput).not.toContain('[instrumentation] onRequestError:')
   })
 
-  it('reports the render error when an aborted runtime prefetch rejects the cached promise', async () => {
+  it('does not report errors when an aborted runtime prefetch rejects the cached promise', async () => {
     const cliOutputStart = next.cliOutput.length
 
     let page: Playwright.Page
@@ -93,19 +86,18 @@ describe('module-level caches keyed on the headers object', () => {
     ])
 
     // The runtime prefetch consists of a prospective prerender (to fill
-    // caches) and a final prerender. Aborting the prospective prerender
-    // rejects its hanging connection() promise. Because the page memoizes the
-    // promise in a module-level cache keyed on the identity of the headers
-    // object, which both prerenders share, the final prerender awaits the
-    // same, now-rejected promise and genuinely fails to render the dynamic
-    // subtree, so the error is reported to instrumentation onRequestError and
-    // logged to the server console.
-    await retry(async () => {
-      const cliOutput = next.cliOutput.slice(cliOutputStart)
-      expect(cliOutput).toContain(
-        `[instrumentation] onRequestError:${HANGING_PROMISE_MESSAGE}`
-      )
-      expect(cliOutput).toContain(`⨯ Error: ${HANGING_PROMISE_MESSAGE}`)
-    }, 5000)
+    // caches) and a final prerender. Both passes resolve `headers()` to a
+    // distinct object, so the module-level cache keyed on the headers object
+    // is scoped to a single render pass: the hanging connection() promise
+    // memoized by the aborted prospective prerender is never observed by the
+    // final prerender. Its rejection stays within the pass that created it,
+    // where React handles it as the expected abort signal, so nothing is
+    // reported to instrumentation onRequestError or logged to the server
+    // console. Allow any (incorrect) reports to flush before asserting their
+    // absence.
+    await waitFor(2000)
+    const cliOutput = next.cliOutput.slice(cliOutputStart)
+    expect(cliOutput).not.toContain('[instrumentation] onRequestError:')
+    expect(cliOutput).not.toContain(`⨯ Error: ${HANGING_PROMISE_MESSAGE}`)
   })
 })
