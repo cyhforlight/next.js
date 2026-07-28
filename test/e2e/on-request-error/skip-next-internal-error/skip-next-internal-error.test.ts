@@ -92,4 +92,11 @@ describe('on-request-error - skip-next-internal-error', () => {
       await assertNoNextjsInternalErrors()
     })
   })
+
+  describe('pages router render', () => {
+    it('should not catch browserOnly CSR bailout errors', async () => {
+      await next.fetch('/browser-only')
+      await assertNoNextjsInternalErrors()
+    })
+  })
 })
